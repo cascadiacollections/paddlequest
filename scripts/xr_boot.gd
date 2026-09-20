@@ -6,16 +6,11 @@ extends RefCounted
 ## capping if a scene ever gets heavy enough to miss frames.
 const MAX_REFRESH_RATE := 0.0
 
-## Fixed foveated rendering: shade the periphery at lower resolution. On a
-## tiled mobile GPU this is close to free performance, and at level 2 with
-## dynamic adjustment it is not noticeable in normal play.
-const FOVEATION_LEVEL := 0
-const FOVEATION_DYNAMIC := true
-
-## Supersampling of the eye render targets. 1.0 is the runtime's recommendation;
-## this scene has enough headroom on an Adreno 650 to push past it for a
-## sharper image.
-const RENDER_SCALE := 1.0
+## Foveation is configured through xr/openxr/foveation_level and
+## foveation_dynamic in project.godot, not from here. Both feed session and
+## swapchain setup, so the engine has to apply them during initialisation;
+## setting them afterwards from session_begun left the headset rendering
+## nothing at all while audio carried on.
 
 
 ## Brings up the OpenXR interface.
@@ -48,14 +43,7 @@ static func start(viewport: Viewport) -> bool:
 
 static func _tune_session(openxr: OpenXRInterface) -> void:
 	_use_fastest_refresh_rate(openxr)
-
-	openxr.foveation_level = FOVEATION_LEVEL
-	openxr.foveation_dynamic = FOVEATION_DYNAMIC
-	# Subsampled images and the render scale both feed swapchain creation, so
-	# they are only applied if asked for; setting them from session_begun is
-	# already too late for the swapchain and blanked the view.
-	if RENDER_SCALE != 1.0:
-		openxr.render_target_size_multiplier = RENDER_SCALE
+	# Reported, not assigned: these come from project.godot.
 	print("OpenXR: foveation=%d dynamic=%s render_scale=%.2f" % [
 		openxr.foveation_level, openxr.foveation_dynamic,
 		openxr.render_target_size_multiplier,

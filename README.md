@@ -81,6 +81,22 @@ value you hand them, including nonsense, without the runtime honouring them.
 The `com.oculus.vrpowermanager.prox_close` broadcast returns `result=0` with no
 receiver. Treat all of those as removed.
 
+## The paddle mesh
+
+`assets/paddle.glb` is generated, not hand-modelled - `just paddle` rebuilds it
+from `tools/make_paddle.py` with Blender headless, so the shape is a diff
+rather than a binary someone has to open a GUI to change.
+
+The axis mapping is the fiddly part and is asserted rather than assumed:
+Blender is Z-up, glTF and Godot are Y-up, and the exporter maps Blender
+(X, Y, Z) to glTF (X, Z, -Y). The blade therefore has to be thin along
+Blender's Y so its face normal lands on Godot's Z, with the handle running out
+along Blender -Y to reach the hand at Godot +Z. Verified by loading the result
+and checking its AABB: X +/-0.17, Y +/-0.19, Z -0.014 to 0.209.
+
+Collision stays a plain box. A convex hull of the blade would catch the handle
+and the ball would bounce off the grip.
+
 ## CI and containers
 
 `.github/workflows/build.yml` exports a release APK on every push, caching

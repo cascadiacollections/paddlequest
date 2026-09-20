@@ -51,6 +51,11 @@ edit:
 check:
     godot --headless --quit-after 1200
 
+# Regenerate the paddle mesh from tools/make_paddle.py.
+paddle:
+    blender --background --python tools/make_paddle.py
+    @ls -lh assets/paddle.glb
+
 # Regression suite (GUT), headless.
 test:
     godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://test -gexit -gprefix=test_
