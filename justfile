@@ -1,6 +1,9 @@
 # Paddle Quest — Godot 4 VR demo for Meta Quest 3/3S
 
-jdk := `mise where java@temurin-21`
+# just evaluates backticks eagerly at load, so this must not fail on a machine
+# without mise - otherwise every recipe dies, including on CI and in the
+# container. Falls back to whatever JAVA_HOME is already set to.
+jdk := `mise where java@temurin-21 2>/dev/null || echo "${JAVA_HOME:-}"`
 apk := "build/paddleball.apk"
 apk_release := "build/paddleball-release.apk"
 openxr_vendors := "5.1.0-stable"
