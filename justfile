@@ -7,6 +7,7 @@ jdk := `mise where java@temurin-21 2>/dev/null || echo "${JAVA_HOME:-}"`
 apk := "build/paddleball.apk"
 apk_release := "build/paddleball-release.apk"
 openxr_vendors := "5.1.0-stable"
+gut_version := "9.7.1"
 
 # With both USB and Wi-Fi transports connected, adb refuses to guess. Set
 # ADB_TARGET to a serial or ip:port to pick one, e.g.
@@ -30,6 +31,14 @@ setup:
     cp -r "$tmp/asset/addons/godotopenxrvendors" addons/
     echo "installed godotopenxrvendors {{openxr_vendors}}"
 
+    if [ ! -d addons/gut ]; then
+      curl -fsSL -o "$tmp/gut.zip" \
+        "https://github.com/bitwes/Gut/archive/refs/tags/v{{gut_version}}.zip"
+      unzip -q "$tmp/gut.zip" -d "$tmp/gut"
+      cp -r "$tmp/gut/Gut-{{gut_version}}/addons/gut" addons/
+      echo "installed gut {{gut_version}}"
+    fi
+
 # Play flat on the desktop (mouse moves the paddle, Esc quits).
 play:
     godot
@@ -41,6 +50,39 @@ edit:
 # Headless smoke test: boots the scene, runs the rally loop, exits.
 check:
     godot --headless --quit-after 1200
+
+# Regression suite (GUT), headless.
+test:
+    godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://test -gexit -gprefix=test_
+
+# Prove the suite can fail by reintroducing the serve-sag bug.
+# Restores via git rather than a temp copy: if this is interrupted mid-run,
+# `git checkout -- scripts/ball.gd` always puts the tree back. An earlier
+# version used a trap and left a broken file behind when it was killed.
+test-mutation:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    if [ -n "$(git status --porcelain scripts/ball.gd)" ]; then
+      echo "scripts/ball.gd has uncommitted changes; commit or stash first"
+      exit 1
+    fi
+    trap 'git checkout -- scripts/ball.gd' EXIT INT TERM
+    python3 - <<'EOF'
+    import re
+    p = "scripts/ball.gd"
+    s = open(p).read()
+    s = re.sub(
+        r"linear_velocity = flat\.normalized\(\).*?\n\t\)\n",
+        "linear_velocity = (toward - from).normalized() * serve_speed\n",
+        s, flags=re.S,
+    )
+    open(p, "w").write(s)
+    EOF
+    if just test > /tmp/mutation.log 2>&1; then
+      echo "MUTATION SURVIVED - the suite does not cover the serve trajectory"
+      exit 1
+    fi
+    echo "mutation caught, suite has teeth"
 
 # Build a debug APK: bigger and slower, but carries the remote debugger.
 build:

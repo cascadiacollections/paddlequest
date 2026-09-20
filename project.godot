@@ -30,7 +30,9 @@ lights_and_shadows/directional_shadow/soft_shadow_filter_quality=0
 
 openxr/enabled=true
 shaders/enabled=true
-# Without this, a desktop run with no headset blocks on a modal dialog.
+; Suppresses the blocking "HMD not detected" modal on desktop runs.
+; Note: this file is ConfigFile format - comments are ';', and a '#' line
+; silently discards every setting after it in the section.
 openxr/startup_alert=false
 openxr/foveation_level=2
 openxr/foveation_dynamic=true

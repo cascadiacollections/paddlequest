@@ -81,6 +81,13 @@ jobs:
             || { echo "::error::import produced no resources"; exit 1; }
           echo "imported $(find .godot/imported -type f | wc -l) resources"
 
+      - name: Regression suite
+        run: |
+          godot --headless -s addons/gut/gut_cmdln.gd \
+            -gdir=res://test -gexit -gprefix=test_ 2>&1 | tee /tmp/gut.log
+          grep -q "All tests passed" /tmp/gut.log \
+            || { echo "::error::regression suite failed"; exit 1; }
+
       - name: Smoke test
         run: |
           godot --headless --quit-after 1200 2>&1 | tee /tmp/smoke.log || true

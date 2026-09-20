@@ -5,3 +5,4 @@ android/
 # Prebuilt OpenXR vendor binaries (~82MB, all platforms).
 # Run `just setup` to fetch them.
 addons/godotopenxrvendors/
+addons/gut/
