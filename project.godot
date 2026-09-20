@@ -34,5 +34,9 @@ shaders/enabled=true
 ; Note: this file is ConfigFile format - comments are ';', and a '#' line
 ; silently discards every setting after it in the section.
 openxr/startup_alert=false
-openxr/foveation_level=2
-openxr/foveation_dynamic=true
+; Foveation renders nothing at all on this Quest Pro (Godot 4.7.2, OpenXR
+; vendors 5.1.0, runtime Oculus 207.218.0): the view goes black while audio
+; and tracking carry on, with no error in logcat. Isolated across two builds -
+; level 0 plays, level 2 is black, whether set here or at runtime.
+openxr/foveation_level=0
+openxr/foveation_dynamic=false
