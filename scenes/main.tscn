@@ -54,7 +54,7 @@ size = Vector3(6, 4.5, 0.2)
 size = Vector3(6, 4.5, 0.2)
 
 [sub_resource type="BoxShape3D" id="Shape_paddle"]
-size = Vector3(0.34, 0.38, 0.028)
+size = Vector3(0.29, 0.32, 0.026)
 
 [sub_resource type="SphereMesh" id="Mesh_ball"]
 radius = 0.06

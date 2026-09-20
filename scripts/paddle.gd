@@ -7,8 +7,10 @@ extends AnimatableBody3D
 ## the right place but never actually moves.
 
 @export var controller_path: NodePath
-## Offset from the controller origin, in controller-local space.
-@export var grip_offset := Vector3(0.0, 0.0, -0.18)
+## Offset from the controller to the blade centre, in controller-local
+## space. The handle joins the blade at its rim and rakes back, so the blade
+## sits above and ahead of the hand rather than straight out in front of it.
+@export var grip_offset := Vector3(0.0, 0.228, -0.133)
 ## Tilt of the paddle face about the grip axis, in degrees.
 @export var grip_tilt_degrees := 0.0
 @export var haptic_strength := 0.6
