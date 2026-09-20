@@ -9,13 +9,13 @@ const MAX_REFRESH_RATE := 0.0
 ## Fixed foveated rendering: shade the periphery at lower resolution. On a
 ## tiled mobile GPU this is close to free performance, and at level 2 with
 ## dynamic adjustment it is not noticeable in normal play.
-const FOVEATION_LEVEL := 2
+const FOVEATION_LEVEL := 0
 const FOVEATION_DYNAMIC := true
 
 ## Supersampling of the eye render targets. 1.0 is the runtime's recommendation;
 ## this scene has enough headroom on an Adreno 650 to push past it for a
 ## sharper image.
-const RENDER_SCALE := 1.15
+const RENDER_SCALE := 1.0
 
 
 ## Brings up the OpenXR interface.
@@ -51,10 +51,11 @@ static func _tune_session(openxr: OpenXRInterface) -> void:
 
 	openxr.foveation_level = FOVEATION_LEVEL
 	openxr.foveation_dynamic = FOVEATION_DYNAMIC
-	# Meta's subsampled layout removes the blocky edges foveation otherwise
-	# leaves where the resolution steps down.
-	openxr.foveation_with_subsampled_images = true
-	openxr.render_target_size_multiplier = RENDER_SCALE
+	# Subsampled images and the render scale both feed swapchain creation, so
+	# they are only applied if asked for; setting them from session_begun is
+	# already too late for the swapchain and blanked the view.
+	if RENDER_SCALE != 1.0:
+		openxr.render_target_size_multiplier = RENDER_SCALE
 	print("OpenXR: foveation=%d dynamic=%s render_scale=%.2f" % [
 		openxr.foveation_level, openxr.foveation_dynamic,
 		openxr.render_target_size_multiplier,

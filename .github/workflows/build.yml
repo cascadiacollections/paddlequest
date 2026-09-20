@@ -71,13 +71,25 @@ jobs:
             -dname "CN=Android Debug,O=Android,C=US" -validity 10000 \
             -keystore ~/keystore/debug.keystore
 
+      # Godot's headless editor reliably aborts on teardown under CI (exit 134)
+      # after the work itself has finished, so these steps assert on what they
+      # produced rather than on an exit code.
       - name: Import project
-        # First import must run on its own: the exporter reads the resource
-        # cache this produces, and a combined run exports before it exists.
-        run: godot --headless --import
+        run: |
+          godot --headless --import || true
+          test -n "$(find .godot/imported -type f 2>/dev/null)" \
+            || { echo "::error::import produced no resources"; exit 1; }
+          echo "imported $(find .godot/imported -type f | wc -l) resources"
 
       - name: Smoke test
-        run: godot --headless --quit-after 1200
+        run: |
+          godot --headless --quit-after 1200 2>&1 | tee /tmp/smoke.log || true
+          if grep -qE "SCRIPT ERROR|Parse Error|Invalid call|Nonexistent" /tmp/smoke.log; then
+            echo "::error::script errors during smoke test"
+            grep -E "SCRIPT ERROR|Parse Error|Invalid call|Nonexistent" /tmp/smoke.log
+            exit 1
+          fi
+          echo "smoke test clean"
 
       - name: Export release APK
         env:
@@ -90,7 +102,10 @@ jobs:
         run: |
           mkdir -p build
           godot --headless --install-android-build-template \
-            --export-release "Quest" build/paddleball-release.apk
+            --export-release "Quest" build/paddleball-release.apk || true
+          test -s build/paddleball-release.apk \
+            || { echo "::error::export produced no APK"; exit 1; }
+          ls -lh build/paddleball-release.apk
 
       - name: Verify the APK targets Quest
         run: |
