@@ -4,6 +4,12 @@ jdk := `mise where java@temurin-21`
 apk := "build/paddleball.apk"
 openxr_vendors := "5.1.0-stable"
 
+# With both USB and Wi-Fi transports connected, adb refuses to guess. Set
+# ADB_TARGET to a serial or ip:port to pick one, e.g.
+#   ADB_TARGET=192.168.1.121:5555 just deploy
+device := env_var_or_default("ADB_TARGET", "")
+adb := if device == "" { "adb" } else { "adb -s " + device }
+
 # Fetch the OpenXR vendors addon. It is gitignored because it is 82MB of
 # prebuilt binaries for every platform; this pulls the pinned release.
 setup:
@@ -42,22 +48,22 @@ build:
     @ls -lh {{apk}}
 
 install:
-    adb install -r {{apk}}
+    {{adb}} install -r {{apk}}
 
 deploy: build install
 
 log:
-    adb logcat -s godot:V GodotOpenXR:V
+    {{adb}} logcat -s godot:V GodotOpenXR:V
 
 devices:
     adb devices -l
 
 # Launch the installed app without taking the headset off.
 run:
-    adb shell monkey -p com.cascadiacollections.paddlequest -c android.intent.category.LAUNCHER 1
+    {{adb}} shell monkey -p com.cascadiacollections.paddlequest -c android.intent.category.LAUNCHER 1
 
 uninstall:
-    adb uninstall com.cascadiacollections.paddlequest
+    {{adb}} uninstall com.cascadiacollections.paddlequest
 
 # --- Wi-Fi deployment -------------------------------------------------
 # One-time, with the headset on USB: flip adb into TCP mode and connect.

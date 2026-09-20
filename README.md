@@ -49,6 +49,34 @@ The rally is pitched at roughly 1.25m â€” chest height rather than head height â
 so that the paddle and the ball stay in the headset's field of view together.
 Raising `WallTarget` and `ServePoint` pushes the action up out of view.
 
+## Headset setup for development
+
+Applied over adb, verified on a Quest Pro (OS 51503870024400340):
+
+```bash
+# Stop the headset sleeping the moment it leaves your head, which drops adb
+# mid-deploy. screen_off_timeout is already 24h; this is the lever that matters.
+adb shell settings put global stay_on_while_plugged_in 7   # revert with 0
+
+# 256 KiB of logcat is about six seconds of Godot output.
+adb logcat -G 16M                                          # resets on reboot
+```
+
+Wireless deploys work but cost ~48s against ~6s over USB, because the headset
+associates to the 2.4GHz band. Worth moving it to 5GHz before relying on it.
+
+With both USB and Wi-Fi transports connected, adb will not guess which to use:
+
+```bash
+ADB_TARGET=192.168.1.121:5555 just deploy
+```
+
+Things that do **not** work, despite appearing in most guides: the
+`debug.oculus.cpuLevel` / `gpuLevel` / `foveation.level` properties accept any
+value you hand them, including nonsense, without the runtime honouring them.
+The `com.oculus.vrpowermanager.prox_close` broadcast returns `result=0` with no
+receiver. Treat all of those as removed.
+
 ## How it fits together
 
 | File | Role |
