@@ -2,6 +2,7 @@
 
 jdk := `mise where java@temurin-21`
 apk := "build/paddleball.apk"
+apk_release := "build/paddleball-release.apk"
 openxr_vendors := "5.1.0-stable"
 
 # With both USB and Wi-Fi transports connected, adb refuses to guess. Set
@@ -26,26 +27,37 @@ setup:
     cp -r "$tmp/asset/addons/godotopenxrvendors" addons/
     echo "installed godotopenxrvendors {{openxr_vendors}}"
 
-# --xr-mode off skips OpenXR probing, which otherwise throws a modal
-# "no HMD detected" dialog and blocks startup.
-
 # Play flat on the desktop (mouse moves the paddle, Esc quits).
 play:
-    godot --xr-mode off
+    godot
 
 # Open the project in the editor.
 edit:
-    godot -e --xr-mode off
+    godot -e
 
 # Headless smoke test: boots the scene, runs the rally loop, exits.
 check:
-    godot --headless --xr-mode off --quit-after 1200
+    godot --headless --quit-after 1200
 
-# Build a debug APK for the headset.
+# Build a debug APK: bigger and slower, but carries the remote debugger.
 build:
     JAVA_HOME={{jdk}} ANDROID_HOME=$HOME/Android/Sdk \
-      godot --headless --xr-mode off --export-debug "Quest" {{apk}}
+      godot --headless --export-debug "Quest" {{apk}}
     @ls -lh {{apk}}
+
+# Build a release APK. Roughly half the size and without debug overhead;
+# this is what you demo. Keystore comes from the environment so nothing
+# machine-specific or secret lands in export_presets.cfg.
+build-release:
+    JAVA_HOME={{jdk}} ANDROID_HOME=$HOME/Android/Sdk \
+      GODOT_ANDROID_KEYSTORE_RELEASE_PATH="${GODOT_ANDROID_KEYSTORE_RELEASE_PATH:-$HOME/.local/share/godot/keystores/debug.keystore}" \
+      GODOT_ANDROID_KEYSTORE_RELEASE_USER="${GODOT_ANDROID_KEYSTORE_RELEASE_USER:-androiddebugkey}" \
+      GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD="${GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD:-android}" \
+      godot --headless --export-release "Quest" {{apk_release}}
+    @ls -lh {{apk_release}}
+
+deploy-release: build-release
+    {{adb}} install -r {{apk_release}}
 
 install:
     {{adb}} install -r {{apk}}

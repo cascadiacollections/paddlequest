@@ -6,6 +6,17 @@ extends RefCounted
 ## capping if a scene ever gets heavy enough to miss frames.
 const MAX_REFRESH_RATE := 0.0
 
+## Fixed foveated rendering: shade the periphery at lower resolution. On a
+## tiled mobile GPU this is close to free performance, and at level 2 with
+## dynamic adjustment it is not noticeable in normal play.
+const FOVEATION_LEVEL := 2
+const FOVEATION_DYNAMIC := true
+
+## Supersampling of the eye render targets. 1.0 is the runtime's recommendation;
+## this scene has enough headroom on an Adreno 650 to push past it for a
+## sharper image.
+const RENDER_SCALE := 1.15
+
 
 ## Brings up the OpenXR interface.
 ##
@@ -29,10 +40,25 @@ static func start(viewport: Viewport) -> bool:
 		# Setting it straight after initialize() is silently ignored, which is
 		# why the headset otherwise sits at its 72Hz default.
 		openxr.session_begun.connect(
-			XRBoot._use_fastest_refresh_rate.bind(openxr), CONNECT_ONE_SHOT
+			XRBoot._tune_session.bind(openxr), CONNECT_ONE_SHOT
 		)
 
 	return true
+
+
+static func _tune_session(openxr: OpenXRInterface) -> void:
+	_use_fastest_refresh_rate(openxr)
+
+	openxr.foveation_level = FOVEATION_LEVEL
+	openxr.foveation_dynamic = FOVEATION_DYNAMIC
+	# Meta's subsampled layout removes the blocky edges foveation otherwise
+	# leaves where the resolution steps down.
+	openxr.foveation_with_subsampled_images = true
+	openxr.render_target_size_multiplier = RENDER_SCALE
+	print("OpenXR: foveation=%d dynamic=%s render_scale=%.2f" % [
+		openxr.foveation_level, openxr.foveation_dynamic,
+		openxr.render_target_size_multiplier,
+	])
 
 
 static func _use_fastest_refresh_rate(openxr: OpenXRInterface) -> void:
