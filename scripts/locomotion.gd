@@ -1,12 +1,15 @@
 extends XROrigin3D
 
 ## Left thumbstick: X strafes, pushing down crouches, pushing up stands back up.
+## Right thumbstick Y moves forward and back, since the left stick's Y axis is
+## spent on crouching.
 ##
 ## Movement is relative to where the player is looking rather than where the
 ## origin happens to face, which is what people expect once they have turned
 ## their head away from the front wall.
 
 @export var controller_path: NodePath
+@export var forward_controller_path: NodePath
 @export var speed := 2.2
 @export var deadzone := 0.2
 @export var crouch_depth := 0.75
@@ -19,18 +22,20 @@ extends XROrigin3D
 @onready var _camera: XRCamera3D = $XRCamera3D
 
 var _controller: XRController3D
+var _forward_controller: XRController3D
 var _crouch := 0.0
 var _base_y := 0.0
 
 
 func _ready() -> void:
 	_controller = get_node_or_null(controller_path) as XRController3D
+	_forward_controller = get_node_or_null(forward_controller_path) as XRController3D
 	_base_y = position.y
 
 
 func _process(delta: float) -> void:
 	var stick := _read_stick()
-	_strafe(stick.x, delta)
+	_move(stick.x, _read_forward(), delta)
 	_crouch_toward(stick.y, delta)
 
 
@@ -46,16 +51,27 @@ func _read_stick() -> Vector2:
 	)
 
 
-func _strafe(amount: float, delta: float) -> void:
-	if absf(amount) < 0.001:
+func _read_forward() -> float:
+	if _forward_controller != null:
+		var stick := _forward_controller.get_vector2("primary")
+		if stick.length() > deadzone:
+			return stick.y
+	return Input.get_axis("ui_page_down", "ui_page_up")
+
+
+func _move(strafe: float, forward: float, delta: float) -> void:
+	if absf(strafe) < 0.001 and absf(forward) < 0.001:
 		return
 
-	var right := _camera.global_transform.basis.x
+	var basis := _camera.global_transform.basis
+	var right := basis.x
+	var ahead := -basis.z
 	right.y = 0.0
-	if right.length_squared() < 0.0001:
+	ahead.y = 0.0
+	if right.length_squared() < 0.0001 or ahead.length_squared() < 0.0001:
 		return
 
-	var motion := right.normalized() * amount * speed * delta
+	var motion := (right.normalized() * strafe + ahead.normalized() * forward) * speed * delta
 	# Clamp where the head ends up rather than the origin: in roomscale the two
 	# can be a metre apart, and clamping the origin still lets the head clip a
 	# wall.

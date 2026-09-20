@@ -1,0 +1,107 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # Godot's Gradle build needs the SDK; the runner ships one, so just
+      # point at it rather than downloading another.
+      - name: Report Android SDK
+        run: echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+
+      - name: Cache Godot and export templates
+        id: godot-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}
+
+      - name: Install Godot and export templates
+        if: steps.godot-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          mkdir -p ~/godot
+          curl -fsSL -o /tmp/godot.zip \
+            "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d ~/godot
+          mv "$HOME/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" "$HOME/godot/godot"
+          chmod +x "$HOME/godot/godot"
+
+          curl -fsSL -o /tmp/templates.tpz \
+            "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q /tmp/templates.tpz -d /tmp/tpl
+          dest="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$dest"
+          mv /tmp/tpl/templates/* "$dest/"
+
+      - name: Add Godot to PATH
+        run: echo "$HOME/godot" >> "$GITHUB_PATH"
+
+      - uses: extractions/setup-just@v3
+
+      - name: Fetch OpenXR vendors addon
+        run: just setup
+
+      - name: Generate a keystore
+        # Sideload builds only. A store release would use a secret instead.
+        run: |
+          mkdir -p ~/keystore
+          keytool -keyalg RSA -genkeypair -alias androiddebugkey \
+            -keypass android -storepass android \
+            -dname "CN=Android Debug,O=Android,C=US" -validity 10000 \
+            -keystore ~/keystore/debug.keystore
+
+      - name: Import project
+        # First import must run on its own: the exporter reads the resource
+        # cache this produces, and a combined run exports before it exists.
+        run: godot --headless --import
+
+      - name: Smoke test
+        run: godot --headless --quit-after 1200
+
+      - name: Export release APK
+        env:
+          GODOT_ANDROID_KEYSTORE_DEBUG_PATH: /home/runner/keystore/debug.keystore
+          GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
+          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
+          GODOT_ANDROID_KEYSTORE_RELEASE_PATH: /home/runner/keystore/debug.keystore
+          GODOT_ANDROID_KEYSTORE_RELEASE_USER: androiddebugkey
+          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: android
+        run: |
+          mkdir -p build
+          godot --headless --install-android-build-template \
+            --export-release "Quest" build/paddleball-release.apk
+
+      - name: Verify the APK targets Quest
+        run: |
+          set -euo pipefail
+          aapt2="$(find "$ANDROID_HOME/build-tools" -name aapt2 -type f | sort | tail -1)"
+          tree="$("$aapt2" dump xmltree --file AndroidManifest.xml build/paddleball-release.apk)"
+          grep -q "com.oculus.intent.category.VR" <<<"$tree"
+          grep -q "questpro" <<<"$tree"
+          echo "manifest declares Quest VR entry points"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paddleball-release-apk
+          path: build/paddleball-release.apk

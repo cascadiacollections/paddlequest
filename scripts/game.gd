@@ -15,11 +15,13 @@ extends Node3D
 @onready var _miss_zone: Area3D = $MissZone
 @onready var _serve_point: Marker3D = $ServePoint
 @onready var _wall_target: Marker3D = $WallTarget
+@onready var _targets: Node3D = $Targets
 @onready var _left: XRController3D = $XROrigin3D/LeftHand
 @onready var _right: XRController3D = $XROrigin3D/RightHand
 
 var _rally := 0
 var _best := 0
+var _points := 0
 var _in_play := false
 var _xr := false
 var _since_progress := 0.0
@@ -41,6 +43,7 @@ func _ready() -> void:
 	_ball.wall_hit.connect(_on_wall_hit)
 	_ball.paddle_hit.connect(_on_paddle_hit)
 	_miss_zone.body_entered.connect(_on_miss)
+	_targets.target_hit.connect(_on_target_hit)
 	_left.button_pressed.connect(_on_button)
 	_right.button_pressed.connect(_on_button)
 
@@ -100,6 +103,12 @@ func _on_paddle_hit(_impact: float) -> void:
 	_paddle.pulse()
 
 
+func _on_target_hit(bonus: int) -> void:
+	_points += bonus
+	_since_progress = 0.0
+	_refresh_label()
+
+
 func _on_miss(body: Node3D) -> void:
 	if not _in_play or body != _ball:
 		return
@@ -109,6 +118,6 @@ func _on_miss(body: Node3D) -> void:
 
 func _refresh_label(message := "") -> void:
 	if message != "":
-		_label.text = "%s\nbest  %d" % [message, _best]
+		_label.text = "%s\nbest  %d\n%d pts" % [message, _best, _points]
 	else:
-		_label.text = "rally  %d\nbest  %d" % [_rally, _best]
+		_label.text = "rally  %d\nbest  %d\n%d pts" % [_rally, _best, _points]

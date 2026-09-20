@@ -47,8 +47,23 @@ func serve(from: Vector3, toward: Vector3) -> void:
 	freeze = true
 	global_position = from
 	freeze = false
-	linear_velocity = (toward - from).normalized() * serve_speed
+	# Aim ballistically rather than straight down the line at the target. At
+	# this gravity the ball drops the better part of a metre crossing the
+	# court, which had the rally arriving around knee height.
+	var delta := toward - from
+	var flat := Vector3(delta.x, 0.0, delta.z)
+	var flight := flat.length() / serve_speed
+	var drop := 0.5 * _gravity_accel() * flight * flight
+	linear_velocity = flat.normalized() * serve_speed + Vector3.UP * (
+		(delta.y + drop) / maxf(flight, 0.001)
+	)
 	angular_velocity = Vector3.ZERO
+
+
+func _gravity_accel() -> float:
+	return float(
+		ProjectSettings.get_setting("physics/3d/default_gravity", 9.8)
+	) * gravity_scale
 
 
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:

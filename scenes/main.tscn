@@ -1,10 +1,11 @@
-[gd_scene load_steps=28 format=3]
+[gd_scene load_steps=36 format=3]
 
 [ext_resource type="Script" path="res://scripts/game.gd" id="1_game"]
 [ext_resource type="Script" path="res://scripts/paddle.gd" id="2_paddle"]
 [ext_resource type="Script" path="res://scripts/ball.gd" id="3_ball"]
 [ext_resource type="AudioStream" path="res://audio/bonk.wav" id="4_bonk"]
 [ext_resource type="Script" path="res://scripts/locomotion.gd" id="5_locomotion"]
+[ext_resource type="Script" path="res://scripts/targets.gd" id="6_targets"]
 
 [sub_resource type="Environment" id="Env_court"]
 background_mode = 1
@@ -88,6 +89,40 @@ radius = 0.06
 friction = 0.05
 bounce = 0.95
 
+[sub_resource type="StandardMaterial3D" id="Mat_target"]
+albedo_color = Color(0.3, 0.95, 0.65, 1)
+emission_enabled = true
+emission = Color(0.2, 1, 0.6, 1)
+emission_energy_multiplier = 1.4
+roughness = 0.3
+
+[sub_resource type="BoxMesh" id="Mesh_target"]
+size = Vector3(0.5, 0.5, 0.04)
+
+[sub_resource type="BoxShape3D" id="Shape_target"]
+size = Vector3(0.5, 0.5, 0.12)
+
+[sub_resource type="StandardMaterial3D" id="Mat_trail"]
+shading_mode = 0
+vertex_color_use_as_albedo = true
+albedo_color = Color(1, 0.7, 0.25, 1)
+transparency = 1
+blend_mode = 1
+
+[sub_resource type="SphereMesh" id="Mesh_trail"]
+material = SubResource("Mat_trail")
+radius = 0.022
+height = 0.044
+radial_segments = 6
+rings = 3
+
+[sub_resource type="ParticleProcessMaterial" id="Proc_trail"]
+particle_flag_disable_z = false
+gravity = Vector3(0, 0, 0)
+scale_min = 0.3
+scale_max = 1.0
+color = Color(1, 0.72, 0.25, 0.8)
+
 [sub_resource type="BoxShape3D" id="Shape_miss"]
 size = Vector3(6, 4.5, 0.4)
 
@@ -105,6 +140,7 @@ shadow_enabled = false
 [node name="XROrigin3D" type="XROrigin3D" parent="."]
 script = ExtResource("5_locomotion")
 controller_path = NodePath("LeftHand")
+forward_controller_path = NodePath("RightHand")
 
 [node name="XRCamera3D" type="XRCamera3D" parent="XROrigin3D"]
 near = 0.05
@@ -200,7 +236,7 @@ shape = SubResource("Shape_paddle")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.25, -1.2)
 mass = 0.06
 physics_material_override = SubResource("PhysMat_ball")
-gravity_scale = 0.3
+gravity_scale = 0.2
 script = ExtResource("3_ball")
 
 [node name="Mesh" type="MeshInstance3D" parent="Ball"]
@@ -210,9 +246,50 @@ surface_material_override/0 = SubResource("Mat_ball")
 [node name="Collision" type="CollisionShape3D" parent="Ball"]
 shape = SubResource("Shape_ball")
 
+[node name="Trail" type="GPUParticles3D" parent="Ball"]
+amount = 28
+lifetime = 0.35
+local_coords = false
+draw_order = 0
+process_material = SubResource("Proc_trail")
+draw_pass_1 = SubResource("Mesh_trail")
+
 [node name="Bonk" type="AudioStreamPlayer3D" parent="Ball"]
 stream = ExtResource("4_bonk")
 unit_size = 6.0
+
+[node name="Targets" type="Node3D" parent="."]
+script = ExtResource("6_targets")
+
+[node name="T1" type="Area3D" parent="Targets"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.4, 1.4, -6.18)
+
+[node name="Mesh" type="MeshInstance3D" parent="Targets/T1"]
+mesh = SubResource("Mesh_target")
+surface_material_override/0 = SubResource("Mat_target")
+
+[node name="Collision" type="CollisionShape3D" parent="Targets/T1"]
+shape = SubResource("Shape_target")
+
+[node name="T2" type="Area3D" parent="Targets"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, -6.18)
+
+[node name="Mesh" type="MeshInstance3D" parent="Targets/T2"]
+mesh = SubResource("Mesh_target")
+surface_material_override/0 = SubResource("Mat_target")
+
+[node name="Collision" type="CollisionShape3D" parent="Targets/T2"]
+shape = SubResource("Shape_target")
+
+[node name="T3" type="Area3D" parent="Targets"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.4, 1.2, -6.18)
+
+[node name="Mesh" type="MeshInstance3D" parent="Targets/T3"]
+mesh = SubResource("Mesh_target")
+surface_material_override/0 = SubResource("Mat_target")
+
+[node name="Collision" type="CollisionShape3D" parent="Targets/T3"]
+shape = SubResource("Shape_target")
 
 [node name="MissZone" type="Area3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.25, 2.4)

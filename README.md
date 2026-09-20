@@ -40,10 +40,14 @@ headset, fails, and blocks startup on a modal "no HMD detected" dialog.
 | Right controller | Paddle |
 | Left thumbstick, left/right | Strafe (clamped to the court) |
 | Left thumbstick, down / up | Crouch / stand |
+| Right thumbstick, up / down | Move forward / back |
 | A, B or Menu button | Re-serve immediately |
 
 Flat-mode equivalents: mouse moves the paddle, arrow keys strafe and crouch,
-Space re-serves, Esc quits.
+PageUp/PageDown move forward and back, Space re-serves, Esc quits.
+
+Hitting one of the three glowing panels on the front wall is worth bonus
+points; it goes dark and reappears elsewhere.
 
 The rally is pitched at roughly 1.25m — chest height rather than head height —
 so that the paddle and the ball stay in the headset's field of view together.
@@ -77,6 +81,16 @@ value you hand them, including nonsense, without the runtime honouring them.
 The `com.oculus.vrpowermanager.prox_close` broadcast returns `result=0` with no
 receiver. Treat all of those as removed.
 
+## CI and containers
+
+`.github/workflows/build.yml` exports a release APK on every push, caching
+Godot and its export templates, and asserts the manifest still declares the
+Quest VR entry points before uploading the artifact.
+
+`.devcontainer/` pins Godot 4.7.2, JDK 21 and the Android SDK. It builds and
+was verified to produce a working toolchain, but note it cannot help with the
+headset half of the loop - deploying and testing still needs local USB.
+
 ## How it fits together
 
 | File | Role |
@@ -85,7 +99,8 @@ receiver. Treat all of those as removed.
 | `scripts/game.gd` | Rally state, serving, miss handling, score readout |
 | `scripts/ball.gd` | Bounce physics, swing transfer, speed floor and ceiling |
 | `scripts/paddle.gd` | Drives the kinematic paddle from the controller; samples swing velocity |
-| `scripts/locomotion.gd` | Left-stick strafe and crouch on the XR origin |
+| `scripts/locomotion.gd` | Strafe, crouch and forward motion on the XR origin |
+| `scripts/targets.gd` | Bonus panels on the front wall that relocate when hit |
 | `scripts/xr_boot.gd` | Brings up OpenXR, falls back to flat rendering |
 
 Two details that are easy to get wrong in VR and are handled deliberately:
@@ -96,6 +111,9 @@ Two details that are easy to get wrong in VR and are handled deliberately:
 - A kinematic body reports zero velocity, so `paddle.gd` samples its own world position
   across frames to derive a swing velocity. Without it a hard swing and a gentle tap
   send the ball at exactly the same speed.
+- The serve is aimed ballistically rather than straight at `WallTarget`. At this
+  gravity the ball drops most of a metre crossing the court, which had the whole
+  rally arriving around knee height and below the wall targets entirely.
 - A ball bouncing straight up and down never reaches the front wall or the miss zone,
   so the rally can neither score nor end. `ball.gd` keeps a floor on horizontal speed,
   and `game.gd` re-serves after `stall_timeout` seconds without a scoring hit.
