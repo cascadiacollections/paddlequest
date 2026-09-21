@@ -22,6 +22,30 @@ func test_the_panel_is_inert_off_device() -> void:
 	assert_false(jukebox.is_live(), "and no web view")
 
 
+func test_the_scene_sizes_the_surface_before_it_asks_for_one() -> void:
+	# OpenXRCompositionLayer.set_android_surface_size() takes a different path
+	# once use_android_surface is already true: it calls xrUpdateSwapchainFB on
+	# a swapchain that has not been created yet, which fails at session start
+	# with XR_ERROR_HANDLE_INVALID. Setting the size first skips that call
+	# entirely. Read as text because the order of the two lines is the whole
+	# point and a loaded scene has already lost it.
+	var scene := FileAccess.get_file_as_string("res://scenes/main.tscn")
+	var size_at := scene.find("android_surface_size")
+	var use_at := scene.find("use_android_surface")
+	assert_gt(size_at, -1, "the scene should set android_surface_size")
+	assert_gt(use_at, -1, "and use_android_surface")
+	assert_lt(size_at, use_at, "size must come first or the swapchain call fires early")
+
+
+func test_the_probe_page_needs_nothing_the_panel_cannot_do() -> void:
+	# The probe exists to isolate the surface, so it must not depend on the
+	# settings that cannot be applied (JavaScript) or on the network.
+	assert_false(Jukebox.PROBE_HTML.contains("<script"), "no JavaScript")
+	assert_false(Jukebox.PROBE_HTML.contains("http"), "nothing fetched")
+	assert_true(Jukebox.PROBE_HTML.contains("TOP LEFT"), "a marker to read the flip from")
+	assert_true(Jukebox.PROBE_HTML.contains("BOTTOM RIGHT"), "and one to read it against")
+
+
 func test_the_home_url_is_one_the_allowlist_admits() -> void:
 	# A default that the node's own allowlist refuses is a panel that ships
 	# blank, and the warning for it only appears on a headset.
@@ -35,7 +59,13 @@ func test_a_refused_url_is_reported_and_not_loaded() -> void:
 	watch_signals(jukebox)
 	var accepted: bool = jukebox.load_url("https://example.com/")
 	assert_false(accepted, "an off-list host should be refused")
-	assert_signal_emitted(jukebox, "navigation_blocked", "and say so")
+
+	# The signal is deferred, because load_url can be reached from the Android
+	# UI thread and emit() is rejected off the Godot one. The return value is
+	# immediate; the signal is not.
+	assert_signal_not_emitted(jukebox, "navigation_blocked", "not in the same frame")
+	await step(1)
+	assert_signal_emitted(jukebox, "navigation_blocked", "but on the next one")
 
 
 func test_an_allowed_url_is_accepted_even_before_the_surface_exists() -> void:

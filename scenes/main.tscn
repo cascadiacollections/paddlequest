@@ -162,8 +162,8 @@ tracker = &"right_hand"
 transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -2.99, 1.7, -2)
 sort_order = -1
 enable_hole_punch = true
-use_android_surface = true
 android_surface_size = Vector2i(1280, 720)
+use_android_surface = true
 quad_size = Vector2(1.28, 0.72)
 script = ExtResource("11_jukebox")
 

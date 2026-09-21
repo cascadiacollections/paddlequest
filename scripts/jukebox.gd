@@ -57,6 +57,20 @@ const DISPLAY_SERVICE := "display"
 ## CSS pixels; 320 gives roughly desktop-like layout at 1280x720.
 const DENSITY_DPI := 320
 
+## The probe page. No JavaScript, no network, no WebView settings - so if this
+## does not appear, the surface itself is the problem and nothing else is.
+## The corner markers double as a flip test; see _show_probe().
+const PROBE_HTML := """
+<html><body style="margin:0;background:#101018;color:#eee;font:40px sans-serif">
+<div style="position:absolute;top:0;left:0;background:#33aaff;color:#000;padding:6px 14px">
+TOP LEFT</div>
+<div style="position:absolute;bottom:0;right:0;background:#ffaa33;color:#000;padding:6px 14px">
+BOTTOM RIGHT</div>
+<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">
+jukebox surface OK</div>
+</body></html>
+"""
+
 ## Where the panel starts.
 ##
 ## A video rather than a home page, because nothing here injects input yet:
@@ -86,6 +100,17 @@ const DENSITY_DPI := 320
 ## Let the page start audio without a tap. A jukebox that needs a click it has
 ## no cursor for is not a jukebox.
 @export var allow_autoplay := true
+
+## Draw the probe page instead of navigating to home_url.
+##
+## On by default because on Android P and up the panel cannot do its real job
+## yet: _apply_settings() is unreachable, so JavaScript stays off, and
+## home_url cannot render whatever it points at. Loading it anyway would put
+## a broken page on the wall and tell us nothing. The probe tells us the one
+## thing still unknown - whether the compositor surface is alive.
+##
+## Turn this off once a settings shim exists.
+@export var probe_only := true
 
 ## Java proxies handed to the UI thread that have not run yet. Nothing else on
 ## our side holds them, and a collected callback is a panel that never appears
@@ -194,7 +219,8 @@ static func is_allowed(url: String, hosts: PackedStringArray) -> bool:
 ## Safe to call before the surface exists; the URL is held until it does.
 func load_url(url: String) -> bool:
 	if not is_allowed(url, allowed_hosts):
-		navigation_blocked.emit(url)
+		# Deferred: load_url can be reached from the Android UI thread.
+		navigation_blocked.emit.call_deferred(url)
 		push_warning("Jukebox: refused to navigate to '%s' - not in allowed_hosts." % url)
 		return false
 
@@ -257,25 +283,65 @@ func _attach_web_view(surface) -> void:
 
 	var web_view_class = JavaClassWrapper.wrap("android.webkit.WebView")
 	_web_view = web_view_class.WebView(_presentation.getContext())
-	_configure(_web_view.getSettings())
 
+	# Content on screen before anything that can fail. _apply_settings() aborts
+	# on Android P and up (see its comment); when it ran first, the abort took
+	# setContentView() and show() with it and the panel stayed grey with only a
+	# ClassNotFoundException to explain it.
 	_presentation.setContentView(_web_view)
 	_presentation.show()
 	_report_java_exception("attaching the web view")
 
-	surface_ready.emit()
+	# emit() is rejected off the Godot thread, and this is the Android UI one.
+	surface_ready.emit.call_deferred()
+
+	if probe_only:
+		_show_probe()
+		return
+	_apply_settings()
 	if _pending_url.is_empty():
 		load_url(home_url)
 	else:
 		_load_pending()
 
 
-func _configure(settings) -> void:
+## Draws a page that needs no JavaScript, no network and no settings, so that
+## what reaches the compositor depends on nothing but the surface itself.
+##
+## This is the experiment that separates the two things a grey panel could
+## mean: a dead swapchain, or a live one with nothing drawn into it. The
+## corner markers answer the vertical-flip question at the same time - TOP
+## LEFT appearing bottom-right is a flip, and needs_vertical_flip() is wrong
+## for this runtime and renderer.
+func _show_probe() -> void:
+	_web_view.loadData(PROBE_HTML, "text/html", "utf-8")
+	_report_java_exception("loading the probe page")
+
+
+## The three WebView settings this panel needs, none of which can currently be
+## applied from GDScript.
+##
+## Since Android P the WebView implementation lives in its own classloader.
+## WebSettings is abstract and the instance behind it is
+## com.android.webview.chromium.ContentSettingsAdapter, which the app
+## classloader cannot see. JavaClassWrapper wraps a return value by its
+## concrete class, so the wrap fails, getSettings() never becomes callable,
+## and the call below raises "Invalid call. Nonexistent function 'getSettings'"
+## and aborts this function. Reflection does not help: Method.invoke() has to
+## hand the same unwrappable object back across the same boundary.
+##
+## Left in place because it is correct, it works before Android P, and it is
+## what a Kotlin shim would replace - see the README. Called last, and only
+## when probe_only is off, so that its failure costs nothing already drawn.
+func _apply_settings() -> void:
+	var settings = _web_view.getSettings()
 	settings.setJavaScriptEnabled(true)
 	settings.setDomStorageEnabled(true)
 	settings.setMediaPlaybackRequiresUserGesture(not allow_autoplay)
-	# The allowlist stops us navigating to file:// ourselves; these stop the
-	# page reaching for it behind our back.
+	# The allowlist stops us navigating to file:// ourselves; these would stop
+	# the page reaching for it behind our back. On Android P and up they are
+	# not reached, so that second layer is not in effect - the README says so
+	# rather than claiming a defence that is not running.
 	settings.setAllowFileAccess(false)
 	settings.setAllowContentAccess(false)
 

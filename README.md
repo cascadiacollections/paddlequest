@@ -99,9 +99,10 @@ Raising `WallTarget` and `ServePoint` pushes the action up out of view.
 A web page on the left wall, drawn by the XR compositor rather than by us.
 `scripts/jukebox.gd`, wired to the `Jukebox` node under `XROrigin3D`.
 
-**Not verified in a headset yet.** It builds, imports, lints and passes the
-suite, and the Android half cannot run anywhere but on the device, so treat
-everything below as the design and the first thing to check.
+**Partly verified on a Quest Pro** (Horizon OS, Godot 4.7.2, vendors 5.1.0).
+The compositor half works. The WebView half does not put anything on the
+panel yet, and one of the design claims below did not survive contact with
+Android. See **Where it actually stands** at the end of this section.
 
 The usual way to put a web page in a VR game is to render an Android WebView
 to a texture and map it onto a quad. That copies the page every frame, samples
@@ -117,9 +118,10 @@ hardware-accelerated WebView and draws into it, and the compositor samples the
 result at panel resolution, once, outside our render loop. Sharp text, working
 video decode, nothing on the frame budget.
 
-It is all GDScript. Implementing `java.lang.Runnable` from a `Callable`
-(`JavaClassWrapper.create_sam_callback`) landed in Godot 4.7, and that was the
-last thing that would have forced a Gradle-built Kotlin plugin.
+It was meant to be all GDScript. Implementing `java.lang.Runnable` from a
+`Callable` (`JavaClassWrapper.create_sam_callback`) landed in Godot 4.7, and
+that removed the last *known* reason to need a Gradle-built Kotlin plugin.
+A second one turned up on the device; see below.
 
 What it costs, and what to look at first in the headset:
 
@@ -150,10 +152,66 @@ is a screen a player can put anything on in front of other people, which is a
 store-review problem before it is a moderation one, and a WebView will happily
 follow `file://` straight into `user://progress.cfg`.
 
+That allowlist governs where *we* navigate. `setAllowFileAccess(false)` and
+`setAllowContentAccess(false)` were meant to stop the *page* reaching for
+`file://` behind our back — and on Android P and up **they are not being
+applied**, for the reason in blocker 1 below. Both are at WebView defaults, so
+file access is on. The allowlist still holds; the second layer does not exist
+yet. Do not ship this panel to anyone until it does.
+
 This is the one thing under `scripts/` that knows what headset it is on, which
 is a real exception to the claim in **Targets** below. The runtime sniffing is
 confined to `needs_vertical_flip`, and it is there because the extension's
 implementations genuinely differ, not because the game does.
+
+#### Where it actually stands
+
+From a run on a USB-tethered Quest Pro.
+
+**Proven.** A second composition layer is submitted and composited every
+frame — `LCnt=2`, `FPS=90/90`, `Stale=0`, `GPU%` under 1. "Nothing on our
+frame budget" holds. The `VirtualDisplay` is created as the system sees it
+(`displayId 24, FLAG_PRESENTATION, real 1280 x 720`), Chromium initialises
+in-process, and `create_sam_callback` delivers the Runnable to the UI thread.
+
+**Blocker — `getSettings()` is unreachable from GDScript.** Since Android P
+the WebView implementation lives in its own classloader. `WebSettings` is
+abstract and the instance behind it is
+`com.android.webview.chromium.ContentSettingsAdapter`, which the app
+classloader cannot see. `JavaClassWrapper` wraps a return value by its
+concrete class, so the wrap fails, the method never becomes callable, and the
+call raises `Invalid call. Nonexistent function 'getSettings'`. Reflection is
+no way out — `Method.invoke()` hands the same unwrappable object back across
+the same boundary.
+
+That means no JavaScript, no DOM storage, no autoplay, and none of the file
+access lockdown. **It takes the Kotlin shim this spike set out to avoid.**
+A few lines — take a `WebView`, apply the settings on the Java side, return
+nothing — but it is a Gradle-built AAR, and that is the honest cost.
+
+Two knock-on fixes are in: the settings call now happens last, so its failure
+no longer takes `setContentView()` and `show()` with it, and `surface_ready`
+is emitted with `call_deferred` because `emit()` is rejected off the Godot
+thread.
+
+**Fixed — `XR_ERROR_HANDLE_INVALID` at session start.** Ours, in the scene
+file. `OpenXRCompositionLayer.set_android_surface_size()` takes a different
+path once `use_android_surface` is already true: it calls `xrUpdateSwapchainFB`
+on a swapchain that has not been created yet. The node set the flag before the
+size, so that fired every launch. Setting the size first skips the call, and
+`test_the_scene_sizes_the_surface_before_it_asks_for_one` pins the order.
+
+Worth saying plainly: the error was probably always cosmetic. `swapchain_size`
+is assigned before the failing call, so the later swapchain still comes up at
+the right size, and the grey panel is fully explained by the settings abort
+above. That is a reading of the engine source, not a measurement.
+
+**Open — is the surface alive?** Nothing has yet drawn into it, so the two
+candidate explanations for a grey panel are still both standing. `probe_only`
+is on by default and loads a page needing no JavaScript, no network and no
+settings. If it appears, the surface works and only the shim is missing. If it
+does not, the swapchain is the real problem. Its corner markers read out the
+vertical flip at the same time, which is the other thing still untested.
 
 ## Headset setup for development
 
