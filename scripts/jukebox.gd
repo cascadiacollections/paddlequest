@@ -58,7 +58,15 @@ const DISPLAY_SERVICE := "display"
 const DENSITY_DPI := 320
 
 ## Where the panel starts.
-@export var home_url := "https://www.youtube.com/"
+##
+## A video rather than a home page, because nothing here injects input yet:
+## a controller ray has no way to press anything, so a page you have to click
+## proves only that the surface is alive. This one starts on its own -
+## setMediaPlaybackRequiresUserGesture is off below - and exercises the whole
+## path in one go: surface, orientation, and hardware decode. It is Blender's
+## Big Buck Bunny at 4K60 (CC-BY), which is the same film GodotVR's
+## android-surface example ships, and it needs no account.
+@export var home_url := "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
 
 ## Hosts this panel may visit, matched on the registrable host and any
 ## subdomain of it. A browser in a social VR app is a screen a player can put

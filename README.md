@@ -137,6 +137,13 @@ What it costs, and what to look at first in the headset:
   level 2 blacks out the view on this Quest Pro. Composition layers and
   foveation share swapchain setup, so expect to re-test that interaction.
 
+**Nothing injects input yet.** A controller ray has no way to press anything
+on the page — that was never part of the spike. So `home_url` defaults to a
+video rather than a home page: it starts on its own and exercises the whole
+path at once, surface through hardware decode, instead of proving only that
+the surface is alive. It is Blender's Big Buck Bunny at 4K60 (CC-BY), no
+account needed. Point it anywhere inside `allowed_hosts` from the inspector.
+
 Navigation is allow-listed (`allowed_hosts`), https-only, and fails closed on
 an empty list. This is not paranoia about our own code: a browser in a VR app
 is a screen a player can put anything on in front of other people, which is a
