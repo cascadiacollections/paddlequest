@@ -2,8 +2,14 @@ class_name XRBoot
 extends RefCounted
 
 ## Ceiling on the display refresh rate. 0 means "whatever the headset offers".
-## A Quest Pro tops out at 90Hz; a Quest 3 will offer 120Hz, which is worth
-## capping if a scene ever gets heavy enough to miss frames.
+## A Quest Pro tops out at 90Hz, a Quest 3 offers 120Hz, and a Steam Frame
+## offers 72/80/90/120 plus an experimental 144Hz.
+##
+## Taking the fastest rate on offer is only safe because physics interpolation
+## is on (see physics/common/physics_interpolation in project.godot): the
+## render rate no longer has to relate to the 90Hz physics tick. Cap this if a
+## scene ever gets heavy enough to miss frames at the top rate - dropping
+## frames at 120 is worse than holding 90.
 const MAX_REFRESH_RATE := 0.0
 
 ## Foveation is configured through xr/openxr/foveation_level and
