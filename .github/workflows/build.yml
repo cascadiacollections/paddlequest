@@ -27,6 +27,24 @@ jobs:
         with:
           fetch-depth: 0
 
+      # First, because it is seconds and everything below it costs minutes.
+      # gdparse catches a syntax error before the suite has to discover it as
+      # a missing "All tests passed", and gdformat keeps the diff noise out of
+      # review. Pinned: gdtoolkit tracks Godot versions and a floating one
+      # would break CI on its own schedule.
+      - name: Lint and format check
+        run: |
+          set -euo pipefail
+          pip install --quiet gdtoolkit==4.5.0 ruff==0.14.0
+          for f in scripts/*.gd test/*.gd; do
+            gdparse "$f" > /dev/null || { echo "::error file=$f::failed to parse"; exit 1; }
+          done
+          echo "all GDScript parses"
+          gdformat --check scripts/ test/
+          gdlint scripts/ test/
+          ruff check tools/
+          ruff format --check tools/
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -129,10 +147,35 @@ jobs:
 
       - name: Regression suite
         run: |
+          set -euo pipefail
           godot --headless -s addons/gut/gut_cmdln.gd \
             -gdir=res://test -gexit -gprefix=test_ 2>&1 | tee /tmp/gut.log
           grep -q "All tests passed" /tmp/gut.log \
             || { echo "::error::regression suite failed"; exit 1; }
+
+          # "All tests passed" is also true when a test script never ran.
+          # GUT skips a file it cannot load with a warning and a zero exit,
+          # so a whole suite can vanish and still report success - which is
+          # exactly how test_save_game.gd went missing once.
+          if grep -q "Ignoring script" /tmp/gut.log; then
+            echo "::error::GUT skipped a test script; it did not run at all"
+            grep "Ignoring script" /tmp/gut.log
+            exit 1
+          fi
+
+          # Belt and braces: every test_*.gd on disk should appear in the
+          # run. Catches a file GUT drops for some other reason entirely.
+          expected=$(ls test/test_*.gd | wc -l | tr -d ' ')
+          actual=$(sed -e 's/\x1b\[[0-9;]*m//g' -e 's/\r$//' /tmp/gut.log \
+            | sed -nE 's/^[[:space:]]*Scripts[[:space:]]+([0-9]+)[[:space:]]*$/\1/p' \
+            | tail -1)
+          if [ -z "$actual" ]; then
+            echo "::error::could not read the script count out of GUT's summary"
+            exit 1
+          fi
+          echo "test scripts on disk: $expected, scripts GUT ran: $actual"
+          [ "$expected" = "$actual" ] \
+            || { echo "::error::expected $expected test scripts, GUT ran $actual"; exit 1; }
 
       - name: Smoke test
         run: |

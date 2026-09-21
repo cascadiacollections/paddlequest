@@ -47,6 +47,7 @@ func _ready() -> void:
 	_left.button_pressed.connect(_on_button)
 	_right.button_pressed.connect(_on_button)
 
+	_best = SaveGame.load_best()
 	_refresh_label("Swing to start")
 	_queue_serve()
 
@@ -86,14 +87,18 @@ func _serve() -> void:
 	_rally = 0
 	_in_play = true
 	_since_progress = 0.0
-	_ball.max_speed = 16.0
+	# ball.serve() resets its own speed ceiling; it is not ours to poke.
 	_ball.serve(_serve_point.global_position, _wall_target.global_position)
 	_refresh_label()
 
 
 func _on_wall_hit(rally: int) -> void:
 	_rally = rally
-	_best = maxi(_best, _rally)
+	if _rally > _best:
+		_best = _rally
+		# Written on improvement rather than on a timer or at exit: a headset
+		# app is closed by taking it off, and there is no shutdown to hook.
+		SaveGame.save_best(_best)
 	_since_progress = 0.0
 	_refresh_label()
 

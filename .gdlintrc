@@ -1,0 +1,10 @@
+# gdlint configuration. Everything not listed here keeps gdtoolkit's default,
+# including max-line-length: 100, which is what gdformat targets.
+
+disable:
+  # gdlint wants @onready node references last, after private state. This
+  # project groups the other way round - exports, then the nodes the script
+  # drives, then the state it keeps - which puts the scene wiring next to the
+  # scene contract it depends on. Both orders are defensible; reshuffling five
+  # files to adopt the linter's is churn without a reader benefit.
+  - class-definitions-order

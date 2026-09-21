@@ -90,6 +90,25 @@ test-mutation:
     fi
     echo "mutation caught, suite has teeth"
 
+# Lint and format check, the same set CI gates on. Needs
+# `pip install gdtoolkit==4.5.0 ruff==0.14.0`.
+lint:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for f in scripts/*.gd test/*.gd; do
+      gdparse "$f" > /dev/null || { echo "failed to parse: $f"; exit 1; }
+    done
+    echo "all GDScript parses"
+    gdformat --check scripts/ test/
+    gdlint scripts/ test/
+    ruff check tools/
+    ruff format --check tools/
+
+# Apply the formatters rather than just checking them.
+format:
+    gdformat scripts/ test/
+    ruff format tools/
+
 # Build a debug APK: bigger and slower, but carries the remote debugger.
 build:
     JAVA_HOME={{jdk}} ANDROID_HOME=$HOME/Android/Sdk \

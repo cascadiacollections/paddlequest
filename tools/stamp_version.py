@@ -61,7 +61,9 @@ def stamp(text: str, code: int, name: str) -> str:
     end = len(text) if nxt == -1 else nxt
     body = text[start:end]
 
-    body, n_code = re.subn(r"^version/code=.*$", f"version/code={code}", body, flags=re.M)
+    body, n_code = re.subn(
+        r"^version/code=.*$", f"version/code={code}", body, flags=re.M
+    )
     body, n_name = re.subn(
         r"^version/name=.*$", f'version/name="{name}"', body, flags=re.M
     )

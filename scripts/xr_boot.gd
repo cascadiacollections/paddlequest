@@ -40,9 +40,7 @@ static func start(viewport: Viewport) -> bool:
 		# The rate can only be raised once the session is actually running.
 		# Setting it straight after initialize() is silently ignored, which is
 		# why the headset otherwise sits at its 72Hz default.
-		openxr.session_begun.connect(
-			XRBoot._tune_session.bind(openxr), CONNECT_ONE_SHOT
-		)
+		openxr.session_begun.connect(XRBoot._tune_session.bind(openxr), CONNECT_ONE_SHOT)
 
 	return true
 
@@ -50,10 +48,12 @@ static func start(viewport: Viewport) -> bool:
 static func _tune_session(openxr: OpenXRInterface) -> void:
 	_use_fastest_refresh_rate(openxr)
 	# Reported, not assigned: these come from project.godot.
-	print("OpenXR: foveation=%d dynamic=%s render_scale=%.2f" % [
-		openxr.foveation_level, openxr.foveation_dynamic,
+	var settings := [
+		openxr.foveation_level,
+		openxr.foveation_dynamic,
 		openxr.render_target_size_multiplier,
-	])
+	]
+	print("OpenXR: foveation=%d dynamic=%s render_scale=%.2f" % settings)
 
 
 static func _use_fastest_refresh_rate(openxr: OpenXRInterface) -> void:

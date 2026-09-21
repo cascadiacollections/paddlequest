@@ -62,7 +62,10 @@ def cylinder_between(a, b, r1, r2, mat, verts=20):
     pa, pb = to_blender(a), to_blender(b)
     delta = pb - pa
     bpy.ops.mesh.primitive_cone_add(
-        vertices=verts, radius1=r1, radius2=r2, depth=delta.length,
+        vertices=verts,
+        radius1=r1,
+        radius2=r2,
+        depth=delta.length,
         location=(pa + pb) / 2.0,
     )
     obj = bpy.context.active_object
@@ -128,8 +131,11 @@ def main():
         # step partway down the handle.
         cylinder_between(NECK_TOP, NECK_BOTTOM, 0.031, GRIP_RADIUS, grip_mat),
         cylinder_between(
-            _lerp(NECK_TOP, NECK_BOTTOM, 0.75), GRIP_END,
-            GRIP_RADIUS, GRIP_RADIUS * 1.06, grip_mat,
+            _lerp(NECK_TOP, NECK_BOTTOM, 0.75),
+            GRIP_END,
+            GRIP_RADIUS,
+            GRIP_RADIUS * 1.06,
+            grip_mat,
         ),
         build_butt(grip_mat),
     ]

@@ -3,6 +3,7 @@ extends PaddleTest
 ## The XR origin is not a physics body, so nothing stops it walking through a
 ## wall except the clamp in locomotion.gd.
 
+
 func before_each() -> void:
 	await build_scene()
 
@@ -16,14 +17,16 @@ func test_strafing_is_clamped_inside_the_court() -> void:
 	await step(2)
 
 	assert_lte(
-		camera.global_position.x, origin.bounds_max.x + 0.01,
+		camera.global_position.x,
+		origin.bounds_max.x + 0.01,
 		"the player should not cross the right wall"
 	)
 
 	origin._move(-1.0, 0.0, 30.0)
 	await step(2)
 	assert_gte(
-		camera.global_position.x, origin.bounds_min.x - 0.01,
+		camera.global_position.x,
+		origin.bounds_min.x - 0.01,
 		"the player should not cross the left wall"
 	)
 

@@ -34,8 +34,7 @@ func test_ships_profiles_for_every_headset_we_target() -> void:
 	var paths := _profile_paths(_map())
 	for required in [TOUCH, FRAME, GENERIC]:
 		assert_true(
-			paths.has(required),
-			"%s missing from the action map (have: %s)" % [required, paths]
+			paths.has(required), "%s missing from the action map (have: %s)" % [required, paths]
 		)
 
 
@@ -58,8 +57,7 @@ func test_steam_frame_binds_the_actions_the_game_reads() -> void:
 
 	for action in REQUIRED_ACTIONS:
 		assert_true(
-			bound.has(action),
-			"'%s' is unbound on Steam Frame (bound: %s)" % [action, bound]
+			bound.has(action), "'%s' is unbound on Steam Frame (bound: %s)" % [action, bound]
 		)
 
 

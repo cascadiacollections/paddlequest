@@ -9,7 +9,12 @@ signal paddle_hit(impact: float)
 @export var min_speed := 5.0
 ## Floor on horizontal speed, to stop the ball settling into a vertical loop.
 @export var min_horizontal := 1.5
-@export var max_speed := 16.0
+## Speed ceiling a rally starts at. Authored value: never written at runtime.
+## The live ceiling is _max_speed, which climbs by rally_gain off the front
+## wall and resets here on every serve.
+@export var base_max_speed := 16.0
+## Hard ceiling the rally gain can never push past, however long the rally.
+@export var absolute_max_speed := 22.0
 ## How much of a swing carries into the ball, on top of the elastic bounce.
 @export var swing_transfer := 0.8
 ## Ball speeds up every time it comes off the front wall.
@@ -30,6 +35,8 @@ var assist_target: Node3D
 var _pending_impulse := Vector3.ZERO
 var _rally := 0
 var _serving := true
+## Live speed ceiling for the rally in progress. Reset by serve().
+var _max_speed := base_max_speed
 
 
 func _ready() -> void:
@@ -43,6 +50,7 @@ func _ready() -> void:
 func serve(from: Vector3, toward: Vector3) -> void:
 	_rally = 0
 	_serving = true
+	_max_speed = base_max_speed
 	_pending_impulse = Vector3.ZERO
 	freeze = true
 	global_position = from
@@ -54,16 +62,14 @@ func serve(from: Vector3, toward: Vector3) -> void:
 	var flat := Vector3(delta.x, 0.0, delta.z)
 	var flight := flat.length() / serve_speed
 	var drop := 0.5 * _gravity_accel() * flight * flight
-	linear_velocity = flat.normalized() * serve_speed + Vector3.UP * (
-		(delta.y + drop) / maxf(flight, 0.001)
+	linear_velocity = (
+		flat.normalized() * serve_speed + Vector3.UP * ((delta.y + drop) / maxf(flight, 0.001))
 	)
 	angular_velocity = Vector3.ZERO
 
 
 func _gravity_accel() -> float:
-	return float(
-		ProjectSettings.get_setting("physics/3d/default_gravity", 9.8)
-	) * gravity_scale
+	return float(ProjectSettings.get_setting("physics/3d/default_gravity", 9.8)) * gravity_scale
 
 
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
@@ -86,8 +92,8 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	_apply_assist(state)
 
 	var speed := state.linear_velocity.length()
-	if speed > max_speed:
-		state.linear_velocity = state.linear_velocity.normalized() * max_speed
+	if speed > _max_speed:
+		state.linear_velocity = state.linear_velocity.normalized() * _max_speed
 	elif speed < min_speed and not _serving:
 		state.linear_velocity = state.linear_velocity.normalized() * min_speed
 
@@ -109,9 +115,7 @@ func _apply_assist(state: PhysicsDirectBodyState3D) -> void:
 	# adding force would also add energy, and the rally would accelerate on its
 	# own regardless of how you hit the ball.
 	var weight := clampf(assist * assist_rate * state.step, 0.0, 1.0)
-	var steered := state.linear_velocity.normalized().lerp(
-		to_target.normalized(), weight
-	)
+	var steered := state.linear_velocity.normalized().lerp(to_target.normalized(), weight)
 	if steered.length_squared() > 0.0001:
 		state.linear_velocity = steered.normalized() * speed
 
@@ -127,7 +131,7 @@ func _on_body_entered(body: Node) -> void:
 		paddle_hit.emit(impact)
 	elif body.is_in_group("front_wall"):
 		_rally += 1
-		max_speed = minf(max_speed * rally_gain, 22.0)
+		_max_speed = minf(_max_speed * rally_gain, absolute_max_speed)
 		wall_hit.emit(_rally)
 
 	_play_bonk(impact)
