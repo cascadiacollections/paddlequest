@@ -86,7 +86,7 @@ func _serve() -> void:
 	_rally = 0
 	_in_play = true
 	_since_progress = 0.0
-	_ball.max_speed = 16.0
+	# ball.serve() resets its own speed ceiling; it is not ours to poke.
 	_ball.serve(_serve_point.global_position, _wall_target.global_position)
 	_refresh_label()
 

@@ -23,8 +23,26 @@ func test_speed_is_capped() -> void:
 	await step(10)
 	assert_lte(
 		ball.linear_velocity.length(),
-		ball.max_speed * 1.1,
-		"ball speed should be clamped to max_speed"
+		ball.absolute_max_speed * 1.1,
+		"ball speed should never exceed the hard ceiling"
+	)
+
+
+func test_the_rally_ceiling_resets_on_a_serve() -> void:
+	# The ceiling climbs by rally_gain off the front wall. It used to live in
+	# the same @export as the authored value, reset by a literal 16.0 in
+	# game.gd - so editing the export in the inspector silently did nothing.
+	var raised := await step_until(
+		func(): return ball.get("_max_speed") > ball.base_max_speed, seconds(8.0)
+	)
+	assert_true(raised, "the ceiling should climb during a rally")
+
+	ball.serve(Vector3(0.0, 1.25, 1.5), Vector3(0.0, 1.25, WALL_Z))
+	assert_almost_eq(
+		ball.get("_max_speed"),
+		ball.base_max_speed,
+		0.001,
+		"a serve should put the ceiling back to the authored value"
 	)
 
 
