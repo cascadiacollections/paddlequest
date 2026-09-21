@@ -54,16 +54,14 @@ func serve(from: Vector3, toward: Vector3) -> void:
 	var flat := Vector3(delta.x, 0.0, delta.z)
 	var flight := flat.length() / serve_speed
 	var drop := 0.5 * _gravity_accel() * flight * flight
-	linear_velocity = flat.normalized() * serve_speed + Vector3.UP * (
-		(delta.y + drop) / maxf(flight, 0.001)
+	linear_velocity = (
+		flat.normalized() * serve_speed + Vector3.UP * ((delta.y + drop) / maxf(flight, 0.001))
 	)
 	angular_velocity = Vector3.ZERO
 
 
 func _gravity_accel() -> float:
-	return float(
-		ProjectSettings.get_setting("physics/3d/default_gravity", 9.8)
-	) * gravity_scale
+	return float(ProjectSettings.get_setting("physics/3d/default_gravity", 9.8)) * gravity_scale
 
 
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
@@ -109,9 +107,7 @@ func _apply_assist(state: PhysicsDirectBodyState3D) -> void:
 	# adding force would also add energy, and the rally would accelerate on its
 	# own regardless of how you hit the ball.
 	var weight := clampf(assist * assist_rate * state.step, 0.0, 1.0)
-	var steered := state.linear_velocity.normalized().lerp(
-		to_target.normalized(), weight
-	)
+	var steered := state.linear_velocity.normalized().lerp(to_target.normalized(), weight)
 	if steered.length_squared() > 0.0001:
 		state.linear_velocity = steered.normalized() * speed
 

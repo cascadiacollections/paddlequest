@@ -19,6 +19,8 @@ extends AnimatableBody3D
 @export var haptic_strength := 0.6
 @export var haptic_duration := 0.08
 
+const FRAME_CONTROLLER := "/interaction_profiles/valve/frame_controller_valve"
+
 ## Per-interaction-profile grip overrides, as {offset, tilt}. OpenXR's grip
 ## pose is defined relative to the physical controller, so a device with a
 ## different shape puts the hand somewhere else relative to the blade. Getting
@@ -29,10 +31,7 @@ extends AnimatableBody3D
 ## numbers so the paddle is in roughly the right place, and wants a pass with
 ## the headset on. See README "Per-device grip offsets".
 const PROFILE_GRIPS := {
-	"/interaction_profiles/valve/frame_controller_valve": {
-		"offset": Vector3(0.0, 0.228, -0.133),
-		"tilt": 0.0,
-	},
+	FRAME_CONTROLLER: {"offset": Vector3(0.0, 0.228, -0.133), "tilt": 0.0},
 }
 
 ## World-space velocity of the paddle, sampled across physics frames. A
@@ -112,6 +111,4 @@ func _target_transform() -> Transform3D:
 
 func pulse() -> void:
 	if _controller != null:
-		_controller.trigger_haptic_pulse(
-			"haptic", 0.0, haptic_strength, haptic_duration, 0.0
-		)
+		_controller.trigger_haptic_pulse("haptic", 0.0, haptic_strength, haptic_duration, 0.0)

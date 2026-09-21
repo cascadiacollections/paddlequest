@@ -54,7 +54,5 @@ func _on_area_entered(body: Node3D, area: Area3D, index: int) -> void:
 func _relocate(area: Area3D, index: int) -> void:
 	var band: Vector2 = BANDS[index % BANDS.size()]
 	area.position = Vector3(
-		randf_range(band.x, band.y),
-		randf_range(height_range.x, height_range.y),
-		area.position.z
+		randf_range(band.x, band.y), randf_range(height_range.x, height_range.y), area.position.z
 	)

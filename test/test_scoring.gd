@@ -2,6 +2,7 @@ extends PaddleTest
 
 ## Wall targets and the miss/reset cycle.
 
+
 func before_each() -> void:
 	await build_scene()
 	await await_serve()

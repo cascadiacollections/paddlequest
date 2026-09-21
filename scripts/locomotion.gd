@@ -45,10 +45,7 @@ func _read_stick() -> Vector2:
 		if stick.length() > deadzone:
 			return stick
 	# Arrow keys stand in for the thumbstick so locomotion is testable flat.
-	return Vector2(
-		Input.get_axis("ui_left", "ui_right"),
-		Input.get_axis("ui_down", "ui_up")
-	)
+	return Vector2(Input.get_axis("ui_left", "ui_right"), Input.get_axis("ui_down", "ui_up"))
 
 
 func _read_forward() -> float:

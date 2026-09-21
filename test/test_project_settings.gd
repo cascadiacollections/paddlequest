@@ -4,6 +4,7 @@ extends GutTest
 ## Godot silently discard every setting after it in that section. That cost us
 ## a working startup_alert and both foveation settings, with no error anywhere.
 
+
 func test_project_godot_has_no_hash_comments() -> void:
 	var file := FileAccess.open("res://project.godot", FileAccess.READ)
 	assert_not_null(file, "project.godot should be readable")
@@ -18,7 +19,8 @@ func test_project_godot_has_no_hash_comments() -> void:
 	file.close()
 
 	assert_eq(
-		offenders, [] as Array[String],
+		offenders,
+		[] as Array[String],
 		"'#' comments silently void the rest of their section; use ';'"
 	)
 
@@ -30,12 +32,10 @@ func test_settings_that_a_broken_comment_would_have_swallowed() -> void:
 	)
 	assert_eq(
 		ProjectSettings.get_setting("rendering/renderer/rendering_method"),
-		"mobile", "Quest needs the mobile renderer"
+		"mobile",
+		"Quest needs the mobile renderer"
 	)
-	assert_true(
-		ProjectSettings.get_setting("xr/openxr/enabled"),
-		"OpenXR must be enabled"
-	)
+	assert_true(ProjectSettings.get_setting("xr/openxr/enabled"), "OpenXR must be enabled")
 
 
 func test_physics_interpolation_is_on() -> void:
