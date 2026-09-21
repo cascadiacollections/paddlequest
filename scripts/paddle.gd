@@ -19,6 +19,16 @@ extends AnimatableBody3D
 @export var haptic_strength := 0.6
 @export var haptic_duration := 0.08
 
+## Weight given to the newest frame when smoothing the swing sample. 1.0 is
+## no smoothing at all. At 90Hz there is very little room here: smooth too
+## hard and a gentle tap converges with a hard swing, which is the one
+## distinction this whole derivation exists to preserve.
+@export_range(0.1, 1.0, 0.05) var swing_smoothing := 0.6
+## Ceiling on the sampled swing speed, m/s. A human arm does not swing a
+## paddle at 30 m/s; anything claiming to is tracking noise, and ball.gd
+## multiplies it straight into an impulse with no clamp of its own.
+@export var max_swing_speed := 12.0
+
 const FRAME_CONTROLLER := "/interaction_profiles/valve/frame_controller_valve"
 
 ## Per-interaction-profile grip overrides, as {offset, tilt}. OpenXR's grip
@@ -61,14 +71,27 @@ func _ready() -> void:
 		# happens after _ready and can happen again if the player swaps
 		# controllers mid-session.
 		_controller.profile_changed.connect(_apply_profile)
+		# A controller that drops out and comes back reappears somewhere else.
+		_controller.tracking_changed.connect(_on_tracking_changed)
+
+
+func _on_tracking_changed(_tracking: bool) -> void:
+	reset_swing()
 
 
 ## Pick the grip geometry for whichever controller the runtime bound. An
 ## unknown or absent profile keeps the exported fallback.
 func _apply_profile(profile: String) -> void:
 	var grip: Dictionary = PROFILE_GRIPS.get(profile, {})
-	_grip_offset = grip.get("offset", grip_offset)
-	_grip_tilt = grip.get("tilt", grip_tilt_degrees)
+	var offset: Vector3 = grip.get("offset", grip_offset)
+	var tilt: float = grip.get("tilt", grip_tilt_degrees)
+	if offset == _grip_offset and is_equal_approx(tilt, _grip_tilt):
+		return
+	_grip_offset = offset
+	_grip_tilt = tilt
+	# The blade centre just moved relative to the hand. That displacement is
+	# not a swing, so do not let the next frame read it as one.
+	reset_swing()
 
 
 func set_flat_mode(enabled: bool) -> void:
@@ -90,11 +113,26 @@ func _physics_process(delta: float) -> void:
 
 	var target := _target_transform()
 	if _sampled:
-		swing_velocity = (target.origin - _last_origin) / delta
+		var raw := (target.origin - _last_origin) / delta
+		# One frame of tracking jitter used to become one launched ball: this
+		# feeds ball.gd's impulse directly. Smooth it, then clamp what is left.
+		swing_velocity = swing_velocity.lerp(raw, swing_smoothing)
+		if swing_velocity.length() > max_swing_speed:
+			swing_velocity = swing_velocity.normalized() * max_swing_speed
 	else:
 		_sampled = true
 	_last_origin = target.origin
 	global_transform = target
+
+
+## Drop the sampled swing and start again from the next frame. Used whenever
+## the paddle's position jumps for a reason that is not the player swinging
+## it - tracking lost and regained, or the grip offset changing under us -
+## since the difference across that jump is not a swing and would read as an
+## enormous one.
+func reset_swing() -> void:
+	_sampled = false
+	swing_velocity = Vector3.ZERO
 
 
 func _target_transform() -> Transform3D:
