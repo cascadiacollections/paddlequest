@@ -110,6 +110,16 @@ build-release:
 deploy-release: build-release
     {{adb}} install -r {{apk_release}}
 
+# What version a build would identify as. CI stamps this automatically.
+version:
+    @python3 tools/stamp_version.py --check
+
+# Write that version into export_presets.cfg. Only needed for a local build
+# you intend to keep or hand to someone - it modifies a tracked file, so
+# revert it afterwards rather than committing the result.
+stamp-version:
+    python3 tools/stamp_version.py
+
 # --- Steam Frame -----------------------------------------------------
 # Frame runs SteamOS on ARM, so the standalone build is a Linux arm64
 # binary rather than an APK - no Gradle, no SDK, no keystore. The Meta
