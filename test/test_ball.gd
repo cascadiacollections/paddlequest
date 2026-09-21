@@ -55,3 +55,28 @@ func test_ball_keeps_moving_once_in_play() -> void:
 		ball.min_speed * 0.8,
 		"the speed floor should keep a slow rally alive"
 	)
+
+
+func test_a_harder_impact_is_louder_and_higher() -> void:
+	# Pitch and volume both ride the impact speed; if either inverted, a
+	# hard smash would sound like a tap and nobody would notice in a diff.
+	assert_gt(ball._impact_pitch(12.0), ball._impact_pitch(2.0), "harder should be higher")
+	assert_gt(ball._impact_volume_db(12.0), ball._impact_volume_db(2.0), "harder should be louder")
+
+
+func test_each_surface_has_its_own_voice() -> void:
+	# One sample, three surfaces. If two voices collapse onto the same
+	# pitch and level, a paddle hit and a floor bounce become the same event
+	# to the ear, which is the thing this exists to avoid.
+	var voices: Dictionary = ball.VOICES
+	for key in ["paddle", "front_wall", "other"]:
+		assert_true(voices.has(key), "missing a voice for '%s'" % key)
+
+	var seen := []
+	for key in voices:
+		var tone: Dictionary = voices[key]
+		var signature := Vector2(tone["pitch"], tone["db"])
+		assert_false(seen.has(signature), "'%s' duplicates another voice" % key)
+		seen.append(signature)
+
+	assert_lt(voices["other"]["db"], voices["paddle"]["db"], "incidental bounces should sit back")

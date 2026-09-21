@@ -1,12 +1,14 @@
-[gd_scene load_steps=33 format=3]
+[gd_scene load_steps=38 format=3]
 
 [ext_resource type="Script" path="res://scripts/game.gd" id="1_game"]
 [ext_resource type="Script" path="res://scripts/paddle.gd" id="2_paddle"]
 [ext_resource type="Script" path="res://scripts/ball.gd" id="3_ball"]
-[ext_resource type="AudioStream" path="res://audio/bonk.wav" id="4_bonk"]
 [ext_resource type="Script" path="res://scripts/locomotion.gd" id="5_locomotion"]
 [ext_resource type="Script" path="res://scripts/targets.gd" id="6_targets"]
 [ext_resource type="PackedScene" path="res://assets/paddle.glb" id="7_paddlemesh"]
+[ext_resource type="Script" path="res://scripts/comfort.gd" id="8_comfort"]
+[ext_resource type="Shader" path="res://shaders/vignette.gdshader" id="9_vignette"]
+[ext_resource type="Script" path="res://scripts/pause_menu.gd" id="10_pausemenu"]
 
 [sub_resource type="Environment" id="Env_court"]
 background_mode = 1
@@ -106,6 +108,21 @@ color = Color(1, 0.72, 0.25, 0.8)
 [sub_resource type="BoxShape3D" id="Shape_miss"]
 size = Vector3(6, 4.5, 0.4)
 
+[sub_resource type="AudioStreamPolyphonic" id="AudioStreamPolyphonic_bonk"]
+polyphony = 8
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_vignette"]
+render_priority = 10
+shader = ExtResource("9_vignette")
+shader_parameter/amount = 0.0
+shader_parameter/inner_radius = 0.28
+shader_parameter/softness = 0.35
+shader_parameter/tint = Color(0, 0, 0, 1)
+
+[sub_resource type="QuadMesh" id="QuadMesh_vignette"]
+material = SubResource("ShaderMaterial_vignette")
+size = Vector2(4, 4)
+
 [node name="Main" type="Node3D"]
 script = ExtResource("1_game")
 
@@ -125,6 +142,14 @@ forward_controller_path = NodePath("RightHand")
 [node name="XRCamera3D" type="XRCamera3D" parent="XROrigin3D"]
 near = 0.05
 far = 60.0
+
+[node name="Vignette" type="MeshInstance3D" parent="XROrigin3D/XRCamera3D" groups=["comfort"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.5)
+visible = false
+cast_shadow = 0
+mesh = SubResource("QuadMesh_vignette")
+script = ExtResource("8_comfort")
+locomotion_path = NodePath("../..")
 
 [node name="LeftHand" type="XRController3D" parent="XROrigin3D"]
 tracker = &"left_hand"
@@ -228,7 +253,7 @@ process_material = SubResource("Proc_trail")
 draw_pass_1 = SubResource("Mesh_trail")
 
 [node name="Bonk" type="AudioStreamPlayer3D" parent="Ball"]
-stream = ExtResource("4_bonk")
+stream = SubResource("AudioStreamPolyphonic_bonk")
 unit_size = 6.0
 
 [node name="Targets" type="Node3D" parent="."]
@@ -286,3 +311,21 @@ best  0"
 font_size = 96
 outline_size = 0
 horizontal_alignment = 1
+
+[node name="PauseMenu" type="Node3D" parent="."]
+script = ExtResource("10_pausemenu")
+controller_path = NodePath("../XROrigin3D/LeftHand")
+camera_path = NodePath("../XROrigin3D/XRCamera3D")
+locomotion_path = NodePath("../XROrigin3D")
+
+[node name="Label" type="Label3D" parent="PauseMenu"]
+pixel_size = 0.0022
+billboard = 0
+no_depth_test = true
+render_priority = 20
+outline_render_priority = 19
+text = "- Paused -"
+font_size = 96
+outline_size = 18
+horizontal_alignment = 1
+vertical_alignment = 1

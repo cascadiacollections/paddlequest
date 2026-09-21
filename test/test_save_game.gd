@@ -30,6 +30,15 @@ func _write(contents: String) -> void:
 	file.close()
 
 
+## Binary rather than text, for the "this is not a config file" case.
+## GDScript has no \x escape, so the bytes go in as bytes.
+func _write_bytes(bytes: PackedByteArray) -> void:
+	var file := FileAccess.open(TMP, FileAccess.WRITE)
+	assert_not_null(file, "should be able to write the fixture")
+	file.store_buffer(bytes)
+	file.close()
+
+
 func test_a_missing_file_reads_as_zero() -> void:
 	assert_eq(SaveGameScript.load_best(TMP), 0, "a first run has no high score")
 
@@ -51,7 +60,7 @@ func test_an_equal_score_is_not_rewritten() -> void:
 
 
 func test_a_garbled_file_reads_as_zero() -> void:
-	_write("this is not a ConfigFile at all\x00\x01")
+	_write_bytes(PackedByteArray([0x00, 0x01, 0xFF, 0xFE, 0x7F, 0x00, 0x42]))
 	assert_eq(SaveGameScript.load_best(TMP), 0, "an unparseable file should read as a fresh start")
 
 

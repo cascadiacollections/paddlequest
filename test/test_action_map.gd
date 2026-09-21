@@ -14,7 +14,14 @@ const GENERIC := "/interaction_profiles/khr/generic_controller"
 
 ## Actions game.gd and paddle.gd actually consume. Everything else in the map
 ## is there for completeness; these are load-bearing.
-const REQUIRED_ACTIONS := ["primary", "ax_button", "by_button", "menu_button", "haptic"]
+const REQUIRED_ACTIONS := [
+	"primary",  # locomotion, and menu navigation
+	"ax_button",  # re-serve, and menu select
+	"by_button",  # re-serve
+	"menu_button",  # opens the pause menu - the only way out in the headset
+	"trigger_click",  # menu select
+	"haptic",
+]
 
 
 func _map() -> OpenXRActionMap:

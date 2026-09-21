@@ -3,8 +3,13 @@ name: Build APK
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
+
+# Only the release step writes anything; everything else is read-only.
+permissions:
+  contents: write
 
 # A superseded push has nothing to tell us; let it go rather than pay for a
 # full engine download and two exports to report on a commit nobody is
@@ -28,10 +33,15 @@ jobs:
           fetch-depth: 0
 
       # First, because it is seconds and everything below it costs minutes.
-      # gdparse catches a syntax error before the suite has to discover it as
-      # a missing "All tests passed", and gdformat keeps the diff noise out of
-      # review. Pinned: gdtoolkit tracks Godot versions and a floating one
-      # would break CI on its own schedule.
+      #
+      # gdparse is a pre-filter, not an authority: it is gdtoolkit's own
+      # grammar, and it is looser than Godot's. It accepted "\x00" in a
+      # string, which Godot rejects outright - the script then failed to load
+      # and GUT skipped the whole file. The script-count guard on the
+      # regression suite below is what actually catches that class of thing.
+      #
+      # Pinned: gdtoolkit tracks Godot versions and a floating one would
+      # break CI on its own schedule.
       - name: Lint and format check
         run: |
           set -euo pipefail
@@ -119,6 +129,12 @@ jobs:
             printf '%s' "$KEYSTORE_B64" | base64 -d > ~/keystore/release.keystore
             echo "keystore=$HOME/keystore/release.keystore" >> "$GITHUB_OUTPUT"
             echo "signed with the configured release key"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            # A warning is the right call for a branch build nobody installs.
+            # For something being published under a version number it is not:
+            # a throwaway-signed APK cannot update any install but its own.
+            echo "::error::A tagged release needs ANDROID_KEYSTORE_BASE64 (plus ANDROID_KEYSTORE_USER and ANDROID_KEYSTORE_PASSWORD) configured."
+            exit 1
           else
             keytool -keyalg RSA -genkeypair -alias androiddebugkey \
               -keypass android -storepass android \
@@ -243,3 +259,21 @@ jobs:
         with:
           name: paddlequest-steamframe-arm64
           path: build/paddlequest.arm64
+
+      # Tag pushes turn the two artifacts into something someone can actually
+      # download. Draft, so a human decides when it goes out. Uses the gh CLI
+      # the runner already ships rather than taking on a third-party action
+      # for four lines of work.
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" \
+            --draft \
+            --generate-notes \
+            --title "$GITHUB_REF_NAME" \
+            build/paddleball-release.apk \
+            build/paddlequest.arm64
+          echo "drafted release $GITHUB_REF_NAME"
