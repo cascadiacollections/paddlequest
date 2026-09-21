@@ -17,6 +17,17 @@ window/vsync/vsync_mode=0
 
 common/physics_ticks_per_second=90
 3d/default_gravity=9.8
+; Physics runs at 90Hz; the headset does not. A Quest Pro is 90, a Quest 3
+; offers 120, and a Steam Frame offers 72/80/90/120 plus an experimental 144.
+; No single tick rate divides all of those, so instead of chasing the display
+; we interpolate between physics frames and let the renderer run at whatever
+; the compositor is pacing it at. Without this the ball and the paddle - the
+; two fastest things on screen - visibly step at 90Hz on a 120Hz display.
+;
+; XRCamera3D and XRNode3D force their own interpolation mode to OFF in their
+; constructors, so head and controller tracking is unaffected and keeps
+; updating at render rate.
+common/physics_interpolation=true
 
 [rendering]
 
