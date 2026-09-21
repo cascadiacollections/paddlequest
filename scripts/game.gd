@@ -18,11 +18,14 @@ extends Node3D
 @onready var _targets: Node3D = $Targets
 @onready var _left: XRController3D = $XROrigin3D/LeftHand
 @onready var _right: XRController3D = $XROrigin3D/RightHand
+@onready var _menu: Node3D = $PauseMenu
+@onready var _origin: XROrigin3D = $XROrigin3D
 
 var _rally := 0
 var _best := 0
 var _points := 0
 var _in_play := false
+var _was_in_play := false
 var _xr := false
 var _since_progress := 0.0
 ## Bumped on every serve so a queued serve that has been superseded by a manual
@@ -46,6 +49,8 @@ func _ready() -> void:
 	_targets.target_hit.connect(_on_target_hit)
 	_left.button_pressed.connect(_on_button)
 	_right.button_pressed.connect(_on_button)
+	_menu.opened.connect(_on_menu_opened)
+	_menu.closed.connect(_on_menu_closed)
 
 	_best = SaveGame.load_best()
 	_refresh_label("Swing to start")
@@ -53,19 +58,38 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel") and not _xr:
-		get_tree().quit()
+	if event.is_action_pressed("ui_cancel"):
+		# Flat runs quit outright, as they always have. In the headset there
+		# is nowhere to quit to, so Esc opens the menu instead - which is
+		# also the only way out of the game from inside it.
+		if _xr:
+			_menu.toggle()
+		else:
+			get_tree().quit()
+	elif _menu.is_open():
+		if event.is_action_pressed("ui_accept"):
+			_menu.activate()
 	elif event.is_action_pressed("ui_accept"):
 		_serve()
 
 
 func _on_button(button: String) -> void:
-	if button in ["ax_button", "by_button", "menu_button"]:
+	# Menu opens and closes the menu; it no longer re-serves. A and B still
+	# do. On Steam Frame all four face buttons live on the right controller,
+	# and ax_button/by_button cover them in pairs.
+	if button == "menu_button":
+		_menu.toggle()
+		return
+	if _menu.is_open():
+		if button in ["ax_button", "trigger_click"]:
+			_menu.activate()
+		return
+	if button in ["ax_button", "by_button"]:
 		_serve()
 
 
 func _process(delta: float) -> void:
-	if not _in_play:
+	if not _in_play or _menu.is_open():
 		return
 	_since_progress += delta
 	if _since_progress > stall_timeout:
@@ -100,6 +124,27 @@ func _on_wall_hit(rally: int) -> void:
 		# app is closed by taking it off, and there is no shutdown to hook.
 		SaveGame.save_best(_best)
 	_since_progress = 0.0
+	_refresh_label()
+
+
+## Gameplay stops, tracking does not. get_tree().paused would take the XR
+## camera with it and lock the world to the player's head, which is the
+## fastest way to make someone ill.
+func _on_menu_opened() -> void:
+	_was_in_play = _in_play
+	_in_play = false
+	_ball.freeze = true
+	_origin.set_locked(true)
+
+
+func _on_menu_closed() -> void:
+	_ball.freeze = false
+	_origin.set_locked(false)
+	# The rally is still where the player left it; serving again would be a
+	# surprise. The stall timer restarts so a long pause does not instantly
+	# trip it.
+	_since_progress = 0.0
+	_in_play = _was_in_play
 	_refresh_label()
 
 

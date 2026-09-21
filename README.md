@@ -43,10 +43,49 @@ headset, fails, and blocks startup on a modal "no HMD detected" dialog.
 | Left thumbstick, left/right | Strafe (clamped to the court) |
 | Left thumbstick, down / up | Crouch / stand |
 | Right thumbstick, up / down | Move forward / back |
-| A, B or Menu button | Re-serve immediately |
+| Right thumbstick, left/right | Snap turn |
+| A or B button | Re-serve immediately |
+| Menu button | Open / close the pause menu |
 
 Flat-mode equivalents: mouse moves the paddle, arrow keys strafe and crouch,
-PageUp/PageDown move forward and back, Space re-serves, Esc quits.
+PageUp/PageDown move forward and back, Tab/Shift-Tab snap turn, Space
+re-serves. Esc quits a flat run; in the headset it opens the menu instead,
+since there is nowhere to quit *to*.
+
+### The pause menu
+
+Menu button, or Esc in the headset. Thumbstick to move, trigger or A to
+choose. It suspends the rally and locks locomotion, but deliberately does
+**not** call `get_tree().paused` - that would stop `XRCamera3D` too and lock
+the rendered world to your head, which is the fastest way to make someone
+ill. Tracking carries on as normal.
+
+| Row | Does |
+|---|---|
+| Resume | Closes the menu; the rally is where you left it |
+| Recenter | `XRServer.center_on_hmd`, for seated play |
+| Comfort vignette | Tunnelling while you move (on by default) |
+| Snap turn | Snap vs. smooth turning (snap by default) |
+| Seated | Drops the origin so your head still reaches rally height |
+| Quit | Leaves the game |
+
+### Comfort
+
+The defaults are the comfortable ones. Someone who needs tunnelling should
+not have to find the menu before they can play without feeling ill; someone
+who does not can turn it off in a few seconds. Settings persist in
+`user://progress.cfg` alongside the high score.
+
+Tunnelling closes a soft vignette in while you are moved or turned
+artificially. Peripheral optical flow your inner ear disagrees with is what
+makes people ill, so narrowing the periphery exactly while that flow is
+happening removes most of it without taking the movement away. **Its
+appearance has not been checked in a headset** - `inner_radius` and
+`softness` on `shaders/vignette.gdshader` are exported for that pass.
+
+Snap turn rotates about your head rather than the XR origin: in roomscale the
+two can be a metre apart, and turning about the origin swings you through an
+arc instead of rotating you in place.
 
 Hitting one of the three glowing panels on the front wall is worth bonus
 points; it goes dark and reappears elsewhere.
@@ -115,8 +154,10 @@ it is wrong; the paddle just sits slightly off in the hand.
 
 Frame is also asymmetric in a way Touch is not: A, B, X and Y all live on the
 right controller and the left gets a dpad, so there is no left-hand X/Y to
-pair with. A/X bind together as the lower pair and B/Y as the upper, which
-keeps "any face button re-serves" true on both devices.
+pair with. A/X bind together as the lower pair and B/Y as the upper, so the
+re-serve buttons land in the same place under the thumb on both devices.
+Frame's Menu button is right-hand only, with the left controller's View
+button bound to the same action.
 
 ## Frame pacing
 

@@ -45,6 +45,7 @@ var _turn_armed := true
 var _moving := false
 var _snap_turn := true
 var _seated := false
+var _locked := false
 
 
 func _ready() -> void:
@@ -65,7 +66,20 @@ func set_seated(seated: bool) -> void:
 	_seated = seated
 
 
+## Stop reading the sticks. The pause menu holds this while it is open: it
+## navigates with the same thumbstick locomotion strafes with, and moving
+## the player around behind an open menu is not something anyone asked for.
+func set_locked(locked: bool) -> void:
+	_locked = locked
+	if locked and _moving:
+		_moving = false
+		motion_changed.emit(false)
+
+
 func _process(delta: float) -> void:
+	if _locked:
+		return
+
 	var stick := _read_stick()
 	var moved := _move(stick.x, _read_forward(), delta)
 	var turned := _turn(_read_turn(), delta)

@@ -1,4 +1,4 @@
-[gd_scene load_steps=37 format=3]
+[gd_scene load_steps=38 format=3]
 
 [ext_resource type="Script" path="res://scripts/game.gd" id="1_game"]
 [ext_resource type="Script" path="res://scripts/paddle.gd" id="2_paddle"]
@@ -8,6 +8,7 @@
 [ext_resource type="PackedScene" path="res://assets/paddle.glb" id="7_paddlemesh"]
 [ext_resource type="Script" path="res://scripts/comfort.gd" id="8_comfort"]
 [ext_resource type="Shader" path="res://shaders/vignette.gdshader" id="9_vignette"]
+[ext_resource type="Script" path="res://scripts/pause_menu.gd" id="10_pausemenu"]
 
 [sub_resource type="Environment" id="Env_court"]
 background_mode = 1
@@ -142,7 +143,7 @@ forward_controller_path = NodePath("RightHand")
 near = 0.05
 far = 60.0
 
-[node name="Vignette" type="MeshInstance3D" parent="XROrigin3D/XRCamera3D"]
+[node name="Vignette" type="MeshInstance3D" parent="XROrigin3D/XRCamera3D" groups=["comfort"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.5)
 visible = false
 cast_shadow = 0
@@ -310,3 +311,21 @@ best  0"
 font_size = 96
 outline_size = 0
 horizontal_alignment = 1
+
+[node name="PauseMenu" type="Node3D" parent="."]
+script = ExtResource("10_pausemenu")
+controller_path = NodePath("../XROrigin3D/LeftHand")
+camera_path = NodePath("../XROrigin3D/XRCamera3D")
+locomotion_path = NodePath("../XROrigin3D")
+
+[node name="Label" type="Label3D" parent="PauseMenu"]
+pixel_size = 0.0022
+billboard = 0
+no_depth_test = true
+render_priority = 20
+outline_render_priority = 19
+text = "- Paused -"
+font_size = 96
+outline_size = 18
+horizontal_alignment = 1
+vertical_alignment = 1
