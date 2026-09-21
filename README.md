@@ -215,6 +215,14 @@ Quest VR entry points before uploading the artifact.
 was verified to produce a working toolchain, but note it cannot help with the
 headset half of the loop - deploying and testing still needs local USB.
 
+Pushing a tag matching `v*` drafts a GitHub Release with both builds
+attached, using the `gh` CLI the runner already ships. It is a draft, so a
+human decides when it goes out. A tagged build **fails** rather than warns
+if `ANDROID_KEYSTORE_BASE64` is not configured: a throwaway-signed APK
+cannot update any install but its own, which is fine for a branch build
+nobody installs and not fine for something published under a version number.
+Store uploads (Horizon, Steam depot) are still open - see issue #13.
+
 Every build is stamped with a version derived from the run number and
 `git describe` (`tools/stamp_version.py`); before that, every build this
 project produced called itself version 1, and two of those cannot coexist
