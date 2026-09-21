@@ -63,7 +63,9 @@ func _refresh() -> void:
 
 func _lines() -> PackedStringArray:
 	var lines := PackedStringArray()
-	lines.append("os=%s driver=%s" % [OS.get_name(), RenderingServer.get_current_rendering_driver_name()])
+	lines.append(
+		"os=%s driver=%s" % [OS.get_name(), RenderingServer.get_current_rendering_driver_name()]
+	)
 
 	var interface := XRServer.find_interface("OpenXR") as OpenXRInterface
 	if interface == null:
