@@ -6,6 +6,7 @@
 jdk := `mise where java@temurin-21 2>/dev/null || echo "${JAVA_HOME:-}"`
 apk := "build/paddleball.apk"
 apk_release := "build/paddleball-release.apk"
+frame_bin := "build/paddlequest.arm64"
 openxr_vendors := "5.1.0-stable"
 gut_version := "9.7.1"
 
@@ -108,6 +109,21 @@ build-release:
 
 deploy-release: build-release
     {{adb}} install -r {{apk_release}}
+
+# --- Steam Frame -----------------------------------------------------
+# Frame runs SteamOS on ARM, so the standalone build is a Linux arm64
+# binary rather than an APK - no Gradle, no SDK, no keystore. The Meta
+# vendor plugin is Quest-only and is not part of this preset.
+#
+# Needs the linux arm64 export template, which ships in the same
+# export_templates bundle the Quest build already uses.
+build-frame:
+    godot --headless --export-release "Steam Frame" {{frame_bin}}
+    @ls -lh {{frame_bin}}
+
+build-frame-debug:
+    godot --headless --export-debug "Steam Frame" {{frame_bin}}
+    @ls -lh {{frame_bin}}
 
 install:
     {{adb}} install -r {{apk}}

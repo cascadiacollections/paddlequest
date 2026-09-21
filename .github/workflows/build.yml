@@ -123,7 +123,34 @@ jobs:
           grep -q "questpro" <<<"$tree"
           echo "manifest declares Quest VR entry points"
 
+      # Steam Frame runs SteamOS on ARM, so its standalone build is a Linux
+      # arm64 binary rather than an APK. It shares the engine and export
+      # templates the Quest build already set up and needs no JDK, SDK or
+      # keystore, so it rides along in this job rather than paying for its
+      # own.
+      - name: Export the Steam Frame build
+        run: |
+          set -euo pipefail
+          godot --headless --export-release "Steam Frame" build/paddlequest.arm64 || true
+          test -s build/paddlequest.arm64 \
+            || { echo "::error::Steam Frame export produced no binary"; exit 1; }
+          ls -lh build/paddlequest.arm64
+
+      - name: Verify the Steam Frame build is arm64
+        run: |
+          set -euo pipefail
+          out="$(file -b build/paddlequest.arm64)"
+          echo "$out"
+          grep -q "ARM aarch64" <<<"$out" \
+            || { echo "::error::expected an ARM aarch64 ELF, got: $out"; exit 1; }
+          echo "Steam Frame binary is arm64"
+
       - uses: actions/upload-artifact@v4
         with:
           name: paddleball-release-apk
           path: build/paddleball-release.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paddlequest-steamframe-arm64
+          path: build/paddlequest.arm64
