@@ -28,10 +28,15 @@ jobs:
           fetch-depth: 0
 
       # First, because it is seconds and everything below it costs minutes.
-      # gdparse catches a syntax error before the suite has to discover it as
-      # a missing "All tests passed", and gdformat keeps the diff noise out of
-      # review. Pinned: gdtoolkit tracks Godot versions and a floating one
-      # would break CI on its own schedule.
+      #
+      # gdparse is a pre-filter, not an authority: it is gdtoolkit's own
+      # grammar, and it is looser than Godot's. It accepted "\x00" in a
+      # string, which Godot rejects outright - the script then failed to load
+      # and GUT skipped the whole file. The script-count guard on the
+      # regression suite below is what actually catches that class of thing.
+      #
+      # Pinned: gdtoolkit tracks Godot versions and a floating one would
+      # break CI on its own schedule.
       - name: Lint and format check
         run: |
           set -euo pipefail
