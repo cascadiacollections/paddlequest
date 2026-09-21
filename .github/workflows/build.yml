@@ -147,10 +147,35 @@ jobs:
 
       - name: Regression suite
         run: |
+          set -euo pipefail
           godot --headless -s addons/gut/gut_cmdln.gd \
             -gdir=res://test -gexit -gprefix=test_ 2>&1 | tee /tmp/gut.log
           grep -q "All tests passed" /tmp/gut.log \
             || { echo "::error::regression suite failed"; exit 1; }
+
+          # "All tests passed" is also true when a test script never ran.
+          # GUT skips a file it cannot load with a warning and a zero exit,
+          # so a whole suite can vanish and still report success - which is
+          # exactly how test_save_game.gd went missing once.
+          if grep -q "Ignoring script" /tmp/gut.log; then
+            echo "::error::GUT skipped a test script; it did not run at all"
+            grep "Ignoring script" /tmp/gut.log
+            exit 1
+          fi
+
+          # Belt and braces: every test_*.gd on disk should appear in the
+          # run. Catches a file GUT drops for some other reason entirely.
+          expected=$(ls test/test_*.gd | wc -l | tr -d ' ')
+          actual=$(sed -e 's/\x1b\[[0-9;]*m//g' -e 's/\r$//' /tmp/gut.log \
+            | sed -nE 's/^[[:space:]]*Scripts[[:space:]]+([0-9]+)[[:space:]]*$/\1/p' \
+            | tail -1)
+          if [ -z "$actual" ]; then
+            echo "::error::could not read the script count out of GUT's summary"
+            exit 1
+          fi
+          echo "test scripts on disk: $expected, scripts GUT ran: $actual"
+          [ "$expected" = "$actual" ] \
+            || { echo "::error::expected $expected test scripts, GUT ran $actual"; exit 1; }
 
       - name: Smoke test
         run: |
