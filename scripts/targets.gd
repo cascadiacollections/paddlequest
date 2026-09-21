@@ -19,10 +19,20 @@ const BANDS: Array[Vector2] = [
 	Vector2(0.8, 2.1),
 ]
 
+## Seeded so a test can assert where panels land. Left at 0 the generator
+## seeds itself from the system clock, which is what a player should get.
+@export var rng_seed := 0
+
 var _areas: Array[Area3D] = []
+var _rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
+	if rng_seed != 0:
+		_rng.seed = rng_seed
+	else:
+		_rng.randomize()
+
 	for child in get_children():
 		var area := child as Area3D
 		if area == null:
@@ -54,5 +64,7 @@ func _on_area_entered(body: Node3D, area: Area3D, index: int) -> void:
 func _relocate(area: Area3D, index: int) -> void:
 	var band: Vector2 = BANDS[index % BANDS.size()]
 	area.position = Vector3(
-		randf_range(band.x, band.y), randf_range(height_range.x, height_range.y), area.position.z
+		_rng.randf_range(band.x, band.y),
+		_rng.randf_range(height_range.x, height_range.y),
+		area.position.z
 	)
