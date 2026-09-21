@@ -188,3 +188,25 @@ wifi-connect ip:
 wifi-off:
     adb disconnect
     adb usb
+
+# --- Jukebox probe ----------------------------------------------------
+# Deploys scenes/dev/jukebox_probe.tscn in place of the game: two composition
+# layer quads side by side, one fed by a SubViewport and one by an Android
+# surface, with the state that print() does not reach logcat on a Label3D
+# between them. Debugging aid for the panel, not something to ship.
+#
+# project.godot is a tracked file, so the main scene swap is reverted on the
+# way out - including if this is interrupted mid-build.
+probe:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "$(git status --porcelain project.godot)" ]; then
+      echo "project.godot has uncommitted changes; commit or stash first"
+      exit 1
+    fi
+    trap 'git checkout -- project.godot' EXIT INT TERM
+    sed -i 's|^run/main_scene=.*|run/main_scene="res://scenes/dev/jukebox_probe.tscn"|' project.godot
+    just build
+    just install
+    {{adb}} shell am force-stop com.cascadiacollections.paddlequest
+    just run

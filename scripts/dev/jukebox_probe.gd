@@ -1,0 +1,97 @@
+extends Node3D
+
+## Debug harness for the jukebox composition layer. Not part of the game.
+##
+## The jukebox panel came up blank on a Quest Pro and the main scene is a bad
+## place to find out why: the panel hangs on the left wall, so "did it render"
+## and "am I looking at it" are the same question, the wall can occlude it, the
+## origin carries the locomotion script, and every answer costs a full rebuild.
+##
+## This scene strips all of that out. Two composition layer quads sit side by
+## side in front of the camera, identical but for one thing:
+##
+##   left  - CONTROL, fed by a SubViewport with a magenta rectangle in it.
+##   right - SURFACE, fed by an Android surface, running scripts/jukebox.gd.
+##
+## Control renders but surface does not  -> the fault is the Android surface
+## path: the WebView's pixels are not reaching the compositor.
+## Neither renders                       -> the fault is the layer itself, and
+## the WebView was never the problem.
+## Both render                           -> the layer and the surface are fine
+## and whatever is wrong is in the page.
+##
+## The Label3D between them carries the state that print() does not reliably
+## get into logcat - runtime, driver, whether the surface came back null, and
+## whether the WebView went live.
+##
+## Run with: just probe
+
+const REFRESH_INTERVAL := 0.5
+
+@onready var control_quad: OpenXRCompositionLayerQuad = $XROrigin3D/ControlQuad
+@onready var surface_quad: OpenXRCompositionLayerQuad = $XROrigin3D/SurfaceQuad
+@onready var status: Label3D = $XROrigin3D/Status
+
+var _elapsed := 0.0
+var _blocked_url := ""
+var _surface_ready := false
+
+
+func _ready() -> void:
+	XRBoot.start(get_viewport())
+
+	# Both signals report into the label rather than the log, since this whole
+	# scene exists to be read through the headset.
+	if surface_quad.has_signal("surface_ready"):
+		surface_quad.surface_ready.connect(func() -> void: _surface_ready = true)
+		surface_quad.navigation_blocked.connect(func(url: String) -> void: _blocked_url = url)
+
+	_refresh()
+
+
+func _process(delta: float) -> void:
+	_elapsed += delta
+	if _elapsed < REFRESH_INTERVAL:
+		return
+	_elapsed = 0.0
+	_refresh()
+
+
+func _refresh() -> void:
+	status.text = "\n".join(_lines())
+
+
+func _lines() -> PackedStringArray:
+	var lines := PackedStringArray()
+	lines.append("os=%s driver=%s" % [OS.get_name(), RenderingServer.get_current_rendering_driver_name()])
+
+	var interface := XRServer.find_interface("OpenXR") as OpenXRInterface
+	if interface == null:
+		lines.append("openxr: NO INTERFACE")
+	else:
+		var runtime: String = interface.get_system_info().get("XRRuntimeName", "?")
+		var version: String = interface.get_system_info().get("XRRuntimeVersion", "?")
+		lines.append("runtime=%s %s" % [runtime, version])
+		lines.append("initialized=%s" % interface.is_initialized())
+
+	lines.append("")
+	lines.append(
+		(
+			"CONTROL  native=%s visible=%s"
+			% [control_quad.is_natively_supported(), control_quad.is_visible_in_tree()]
+		)
+	)
+
+	var surface = surface_quad.get_android_surface()
+	lines.append(
+		(
+			"SURFACE  native=%s visible=%s"
+			% [surface_quad.is_natively_supported(), surface_quad.is_visible_in_tree()]
+		)
+	)
+	lines.append("         android_surface=%s" % ("null" if surface == null else "ok"))
+	lines.append("         webview_live=%s ready=%s" % [surface_quad.is_live(), _surface_ready])
+	if not _blocked_url.is_empty():
+		lines.append("         BLOCKED %s" % _blocked_url)
+
+	return lines
