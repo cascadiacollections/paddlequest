@@ -94,6 +94,60 @@ The rally is pitched at roughly 1.25m — chest height rather than head height �
 so that the paddle and the ball stay in the headset's field of view together.
 Raising `WallTarget` and `ServePoint` pushes the action up out of view.
 
+### The jukebox panel (spike)
+
+A web page on the left wall, drawn by the XR compositor rather than by us.
+`scripts/jukebox.gd`, wired to the `Jukebox` node under `XROrigin3D`.
+
+**Not verified in a headset yet.** It builds, imports, lints and passes the
+suite, and the Android half cannot run anywhere but on the device, so treat
+everything below as the design and the first thing to check.
+
+The usual way to put a web page in a VR game is to render an Android WebView
+to a texture and map it onto a quad. That copies the page every frame, samples
+it through the eye buffer — which is why in-game browsers look mushy next to
+the system one — and cannot show DRM-protected content at all, because
+protected surfaces never capture. For a jukebox that last point is the whole
+game: YouTube and Spotify are exactly what will not come through.
+
+This uses `OpenXRCompositionLayer.use_android_surface` instead, which asks the
+runtime (`XR_KHR_android_surface_swapchain`) for an `android.view.Surface`
+backed by the compositor's own swapchain. A `VirtualDisplay` hosts a real,
+hardware-accelerated WebView and draws into it, and the compositor samples the
+result at panel resolution, once, outside our render loop. Sharp text, working
+video decode, nothing on the frame budget.
+
+It is all GDScript. Implementing `java.lang.Runnable` from a `Callable`
+(`JavaClassWrapper.create_sam_callback`) landed in Godot 4.7, and that was the
+last thing that would have forced a Gradle-built Kotlin plugin.
+
+What it costs, and what to look at first in the headset:
+
+- The layer is a flat quad the compositor owns, not geometry. No shaders on
+  it, and depth only through hole punch. Hole punch is reported to misbehave
+  on some Quest runtimes; if the panel ghosts or punches through things it
+  should not, turn `enable_hole_punch` off on the node and accept that it
+  draws over the court.
+- `XR_KHR_android_surface_swapchain` is implemented inconsistently — the
+  Oculus runtime flips the surface under the GL drivers, Pico flips under
+  Vulkan. `Jukebox.needs_vertical_flip` encodes both. Quest on the mobile
+  (Vulkan) renderer, which is what this project ships, should need no flip;
+  if the page comes up upside down, that is the first thing that is wrong.
+- Foveation is already off in this project (see `project.godot`) because
+  level 2 blacks out the view on this Quest Pro. Composition layers and
+  foveation share swapchain setup, so expect to re-test that interaction.
+
+Navigation is allow-listed (`allowed_hosts`), https-only, and fails closed on
+an empty list. This is not paranoia about our own code: a browser in a VR app
+is a screen a player can put anything on in front of other people, which is a
+store-review problem before it is a moderation one, and a WebView will happily
+follow `file://` straight into `user://progress.cfg`.
+
+This is the one thing under `scripts/` that knows what headset it is on, which
+is a real exception to the claim in **Targets** below. The runtime sniffing is
+confined to `needs_vertical_flip`, and it is there because the extension's
+implementations genuinely differ, not because the game does.
+
 ## Headset setup for development
 
 Applied over adb, verified on a Quest Pro (OS 51503870024400340):

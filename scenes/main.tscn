@@ -1,4 +1,4 @@
-[gd_scene load_steps=38 format=3]
+[gd_scene load_steps=39 format=3]
 
 [ext_resource type="Script" path="res://scripts/game.gd" id="1_game"]
 [ext_resource type="Script" path="res://scripts/paddle.gd" id="2_paddle"]
@@ -9,6 +9,7 @@
 [ext_resource type="Script" path="res://scripts/comfort.gd" id="8_comfort"]
 [ext_resource type="Shader" path="res://shaders/vignette.gdshader" id="9_vignette"]
 [ext_resource type="Script" path="res://scripts/pause_menu.gd" id="10_pausemenu"]
+[ext_resource type="Script" path="res://scripts/jukebox.gd" id="11_jukebox"]
 
 [sub_resource type="Environment" id="Env_court"]
 background_mode = 1
@@ -156,6 +157,15 @@ tracker = &"left_hand"
 
 [node name="RightHand" type="XRController3D" parent="XROrigin3D"]
 tracker = &"right_hand"
+
+[node name="Jukebox" type="OpenXRCompositionLayerQuad" parent="XROrigin3D"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -2.99, 1.7, -2)
+sort_order = -1
+enable_hole_punch = true
+use_android_surface = true
+android_surface_size = Vector2i(1280, 720)
+quad_size = Vector2(1.28, 0.72)
+script = ExtResource("11_jukebox")
 
 [node name="Court" type="Node3D" parent="."]
 
