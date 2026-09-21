@@ -27,11 +27,24 @@ signal paddle_hit(impact: float)
 ## Peak steering rate in radians-ish per second at assist = 1.
 @export var assist_rate := 6.0
 
+const IMPACT_SOUND := preload("res://audio/bonk.wav")
+
+## Voicing per surface, as {pitch, db}. One sample, but a paddle hit, a
+## return off the front wall and an incidental floor bounce should not be the
+## same event to the ear - the floor in particular happens constantly and
+## wants to sit back behind the two that mean something.
+const VOICES := {
+	"paddle": {"pitch": 1.25, "db": 2.0},
+	"front_wall": {"pitch": 0.8, "db": 1.0},
+	"other": {"pitch": 1.0, "db": -5.0},
+}
+
 ## Set by game.gd - what the assist steers towards.
 var assist_target: Node3D
 
 @onready var _bonk: AudioStreamPlayer3D = $Bonk
 
+var _playback: AudioStreamPlaybackPolyphonic
 var _pending_impulse := Vector3.ZERO
 var _rally := 0
 var _serving := true
@@ -45,6 +58,14 @@ func _ready() -> void:
 	# A 16 m/s ball crosses a 2.5 cm paddle in well under one physics tick.
 	continuous_cd = true
 	body_entered.connect(_on_body_entered)
+
+	# A single player restarts its stream on every play(), so a fast rally
+	# cut its own impacts off. AudioStreamPolyphonic layers them instead, and
+	# hands out its playback only once the player is running - the polyphonic
+	# stream itself is silent until play_stream is called.
+	if _bonk != null:
+		_bonk.play()
+		_playback = _bonk.get_stream_playback() as AudioStreamPlaybackPolyphonic
 
 
 func serve(from: Vector3, toward: Vector3) -> void:
@@ -126,15 +147,18 @@ func _on_body_entered(body: Node) -> void:
 	# serve can start gently without being yanked up to rally pace.
 	_serving = false
 
+	var voice := "other"
 	if body.is_in_group("paddle"):
+		voice = "paddle"
 		_apply_swing(body)
 		paddle_hit.emit(impact)
 	elif body.is_in_group("front_wall"):
+		voice = "front_wall"
 		_rally += 1
 		_max_speed = minf(_max_speed * rally_gain, absolute_max_speed)
 		wall_hit.emit(_rally)
 
-	_play_bonk(impact)
+	_play_bonk(impact, voice)
 
 
 func _apply_swing(paddle: Node3D) -> void:
@@ -145,12 +169,20 @@ func _apply_swing(paddle: Node3D) -> void:
 	_pending_impulse = face * push * swing_transfer
 
 
-func _play_bonk(impact: float) -> void:
-	if _bonk == null:
+func _play_bonk(impact: float, voice: String) -> void:
+	if _playback == null:
 		return
-	_bonk.pitch_scale = clampf(0.75 + impact * 0.05, 0.75, 1.8)
-	_bonk.volume_db = _impact_volume_db(impact)
-	_bonk.play()
+	var tone: Dictionary = VOICES.get(voice, VOICES["other"])
+	_playback.play_stream(
+		IMPACT_SOUND,
+		0.0,
+		_impact_volume_db(impact) + tone["db"],
+		_impact_pitch(impact) * tone["pitch"]
+	)
+
+
+func _impact_pitch(impact: float) -> float:
+	return clampf(0.75 + impact * 0.05, 0.75, 1.8)
 
 
 func _impact_volume_db(impact: float) -> float:

@@ -3,7 +3,6 @@
 [ext_resource type="Script" path="res://scripts/game.gd" id="1_game"]
 [ext_resource type="Script" path="res://scripts/paddle.gd" id="2_paddle"]
 [ext_resource type="Script" path="res://scripts/ball.gd" id="3_ball"]
-[ext_resource type="AudioStream" path="res://audio/bonk.wav" id="4_bonk"]
 [ext_resource type="Script" path="res://scripts/locomotion.gd" id="5_locomotion"]
 [ext_resource type="Script" path="res://scripts/targets.gd" id="6_targets"]
 [ext_resource type="PackedScene" path="res://assets/paddle.glb" id="7_paddlemesh"]
@@ -105,6 +104,9 @@ color = Color(1, 0.72, 0.25, 0.8)
 
 [sub_resource type="BoxShape3D" id="Shape_miss"]
 size = Vector3(6, 4.5, 0.4)
+
+[sub_resource type="AudioStreamPolyphonic" id="AudioStreamPolyphonic_bonk"]
+polyphony = 8
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_game")
@@ -228,7 +230,7 @@ process_material = SubResource("Proc_trail")
 draw_pass_1 = SubResource("Mesh_trail")
 
 [node name="Bonk" type="AudioStreamPlayer3D" parent="Ball"]
-stream = ExtResource("4_bonk")
+stream = SubResource("AudioStreamPolyphonic_bonk")
 unit_size = 6.0
 
 [node name="Targets" type="Node3D" parent="."]
