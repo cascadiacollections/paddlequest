@@ -60,6 +60,27 @@ signal navigation_blocked(url: String)
 const VIRTUAL_DISPLAY_FLAG_PRESENTATION := 1 << 1
 const VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY := 1 << 3
 
+## VIRTUAL_DISPLAY_FLAG_SECURE. Documented, and deliberately never set.
+##
+## protected_content on this layer does work in the sense that the runtime
+## allocates a protected swapchain - "creating as protected resource" appears
+## in logcat. What cannot be done is filling it. A protected swapchain expects
+## a secure producer, and asking for a secure VirtualDisplay throws:
+##
+##   SecurityException: Requires CAPTURE_SECURE_VIDEO_OUTPUT or an appropriate
+##   MediaProjection token to create a secure virtual display.
+##
+## CAPTURE_SECURE_VIDEO_OUTPUT is signature-level, so a normal app cannot hold
+## it. Without the flag the display is not entitled to fill the protected
+## buffer and the panel draws a placeholder instead of the page - measured on
+## a Quest Pro, both ways.
+##
+## So DRM playback is out of reach for this design, whatever the composition
+## layer can allocate. Leave protected_content off. Getting there would mean
+## a browser that renders to the surface directly rather than through a
+## VirtualDisplay, which is a native Chromium embedding, not GDScript.
+const VIRTUAL_DISPLAY_FLAG_SECURE := 1 << 2
+
 ## Context.DISPLAY_SERVICE.
 const DISPLAY_SERVICE := "display"
 
@@ -438,13 +459,12 @@ func _attach_web_view(surface) -> void:
 		return
 
 	var display_manager = activity.getSystemService(DISPLAY_SERVICE)
+	# No SECURE flag even when protected_content is set - see the constant. It
+	# would throw rather than help, turning a broken panel into no panel.
+	var flags := VIRTUAL_DISPLAY_FLAG_PRESENTATION | VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY
+
 	_virtual_display = display_manager.createVirtualDisplay(
-		"jukebox",
-		android_surface_size.x,
-		android_surface_size.y,
-		density_dpi,
-		surface,
-		VIRTUAL_DISPLAY_FLAG_PRESENTATION | VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY
+		"xr_web_panel", android_surface_size.x, android_surface_size.y, density_dpi, surface, flags
 	)
 	if _virtual_display == null:
 		_report_java_exception("creating the virtual display")

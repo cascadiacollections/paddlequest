@@ -39,11 +39,17 @@ const TAP_AFTER := 12.0
 @onready var control_quad: OpenXRCompositionLayerQuad = $XROrigin3D/ControlQuad
 @onready var surface_quad: OpenXRCompositionLayerQuad = $XROrigin3D/SurfaceQuad
 @onready var status: Label3D = $XROrigin3D/Status
+@onready var right_hand: XRController3D = $XROrigin3D/RightHand
+@onready var pointer: MeshInstance3D = $Pointer
 
 var _elapsed := 0.0
 var _viewport_was_null := false
 var _since_ready := 0.0
 var _tap_result := "waiting"
+var _dragging := false
+var _last_uv := Vector2(0.5, 0.5)
+var _on_panel := false
+var _last_action := "none"
 var _blocked_url := ""
 var _surface_ready := false
 
@@ -78,11 +84,59 @@ func _process(delta: float) -> void:
 			var sent: bool = surface_quad.tap(Vector2(0.5, 0.5))
 			_tap_result = "sent, video should pause" if sent else "REFUSED"
 
+	_aim()
+
 	_elapsed += delta
 	if _elapsed < REFRESH_INTERVAL:
 		return
 	_elapsed = 0.0
 	_refresh()
+
+
+## Points the right hand at the panel and turns the trigger into touches.
+##
+## The ray is intersected with the quad's plane rather than raycast at a
+## collision shape, because the quad has none - a composition layer is not
+## geometry, and giving it an Area3D just to be pointed at would be a body
+## that exists only to be hit.
+func _aim() -> void:
+	var origin := right_hand.global_position
+	var direction := -right_hand.global_transform.basis.z
+	var normal := surface_quad.global_transform.basis.z
+
+	var denominator := direction.dot(normal)
+	var uv := Vector2(-1.0, -1.0)
+	if absf(denominator) > 0.0001:
+		var distance := (surface_quad.global_position - origin).dot(normal) / denominator
+		if distance > 0.0:
+			var hit := origin + direction * distance
+			uv = surface_quad.local_to_uv(surface_quad.to_local(hit))
+			pointer.global_position = hit
+
+	_on_panel = XRWebPanel.uv_is_on_panel(uv)
+	pointer.visible = _on_panel
+	if _on_panel:
+		_last_uv = uv
+
+	var held := right_hand.is_button_pressed("trigger_click")
+	if held and not _dragging and _on_panel:
+		_dragging = true
+		_act("DOWN", surface_quad.send_touch(XRWebPanel.ACTION_DOWN, uv))
+	elif held and _dragging:
+		if _on_panel:
+			_act("MOVE", surface_quad.send_touch(XRWebPanel.ACTION_MOVE, uv))
+		else:
+			# Off the edge mid-drag: end it where it was last real, rather than
+			# leaving the page waiting for an UP that has gone elsewhere.
+			_dragging = false
+			_act("CANCEL", surface_quad.send_touch(XRWebPanel.ACTION_CANCEL, _last_uv))
+	elif not held and _dragging:
+		_dragging = false
+		_act("UP", surface_quad.send_touch(XRWebPanel.ACTION_UP, _last_uv))
+
+
+func _act(name: String, sent: bool) -> void:
+	_last_action = "%s %s" % [name, "sent" if sent else "REFUSED"]
 
 
 func _refresh() -> void:
@@ -128,6 +182,10 @@ func _lines() -> PackedStringArray:
 	lines.append("         android_surface=%s" % ("null" if surface == null else "ok"))
 	lines.append("         webview_live=%s ready=%s" % [surface_quad.is_live(), _surface_ready])
 	lines.append("         tap=%s" % _tap_result)
+	lines.append("         protected=%s" % surface_quad.protected_content)
+	lines.append("")
+	lines.append("AIM      on_panel=%s uv=%.2f,%.2f" % [_on_panel, _last_uv.x, _last_uv.y])
+	lines.append("         last=%s" % _last_action)
 	if not _blocked_url.is_empty():
 		lines.append("         BLOCKED %s" % _blocked_url)
 

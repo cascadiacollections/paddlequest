@@ -101,6 +101,7 @@ Blank panel, in the order worth checking: the plugin is not in the APK (see step
 ## Known limits
 
 - **`loadData()` cannot carry `#` or `%`.** It URL-decodes its payload, so `#` truncates the document at that point and `%` reads as an escape — silently, with a blank panel and nothing in the log. Applies to any HTML passed to the panel this way.
+- **DRM does not work, and cannot.** `protected_content` makes the runtime allocate a protected swapchain, but nothing may fill it: a secure `VirtualDisplay` needs `CAPTURE_SECURE_VIDEO_OUTPUT`, which is signature-level and out of reach for a normal app, and without it the panel draws a placeholder instead of the page. Measured both ways on a Quest Pro. Leave `protected_content` off. Widevine would need a browser that renders to the surface directly rather than through a `VirtualDisplay` — a native Chromium embedding, not GDScript.
 - **Hole punch is untested here.** The verified configuration is `sort_order` overlay without it.
 - **Foveation interacts with composition layers** through shared swapchain setup and has not been exercised.
 
