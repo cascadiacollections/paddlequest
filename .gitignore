@@ -1,6 +1,12 @@
 .godot/
 build/
-android/
+
+# Root-anchored: only the Android build template the engine generates here.
+# Unanchored, this matched a directory named "android" at any depth, which
+# silently swallowed addons/xr_webview/android - the plugin descriptor never
+# reached CI and the export failed looking for it. Files already tracked
+# survived a git mv into that path and hid the problem.
+/android/
 
 # Prebuilt OpenXR vendor binaries (~82MB, all platforms).
 # Run `just setup` to fetch them.

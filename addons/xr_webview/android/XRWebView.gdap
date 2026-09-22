@@ -1,0 +1,11 @@
+[config]
+
+name="XRWebView"
+binary_type="local"
+binary="xr-webview-release.aar"
+
+[dependencies]
+
+local=[]
+remote=[]
+custom_maven_repos=[]
