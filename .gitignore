@@ -7,15 +7,16 @@ android/
 addons/godotopenxrvendors/
 addons/gut/
 
-# Gradle scratch for the WebView shim. The AAR it produces is not committed
-# either - `just shim` builds it into android/plugins/, which is gitignored
-# along with the rest of the generated android/ tree.
-tools/jukebox-shim/.gradle/
-tools/jukebox-shim/build/
-tools/jukebox-shim/local.properties
+# Gradle scratch for the addon's Android plugin. The AAR it produces is not
+# committed either - `just shim` builds it into android/plugins/, which is
+# gitignored along with the rest of the generated android/ tree. Releases ship
+# the built AAR so consumers never need Gradle.
+addons/xr_webview/android/.gradle/
+addons/xr_webview/android/build/
+addons/xr_webview/android/local.properties
 
 # The wrapper jar is part of the wrapper contract - without it `./gradlew`
 # cannot bootstrap on a fresh clone. Negated explicitly because ignoring
 # "*.jar" globally is a common setup and is in force on at least one machine
 # here; a repo .gitignore takes precedence over core.excludesFile.
-!tools/jukebox-shim/gradle/wrapper/gradle-wrapper.jar
+!addons/xr_webview/android/gradle/wrapper/gradle-wrapper.jar

@@ -1,4 +1,4 @@
-package com.cascadiacollections.jukebox;
+package com.cascadiacollections.xrwebview;
 
 import android.util.Log;
 import android.webkit.ConsoleMessage;
@@ -10,7 +10,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 /**
- * The parts of the jukebox panel that GDScript cannot reach.
+ * The parts of an Android WebView that GDScript cannot reach.
  *
  * <p>Not here for convenience. Since Android P the WebView implementation lives in its own
  * classloader, and the object behind the abstract {@link WebSettings} is
@@ -31,16 +31,16 @@ import android.webkit.WebViewClient;
  * string rather than an array, because string arrays are the marshalling case least worth
  * betting a device round-trip on.
  */
-public final class JukeboxBridge {
-	private static final String TAG = "Jukebox";
+public final class XRWebViewBridge {
+	private static final String TAG = "XRWebView";
 
-	private JukeboxBridge() {}
+	private XRWebViewBridge() {}
 
 	/**
 	 * Applies the settings the panel needs. Call on the UI thread, before loading anything.
 	 *
-	 * @param autoplay  whether media may start without a user gesture - a jukebox has no
-	 *                  cursor to tap with, so it must
+	 * @param autoplay  whether media may start without a user gesture - an XR panel has no
+	 *                  cursor to tap with until input is wired up, so it must
 	 * @param userAgent sent instead of the WebView default when non-empty. The default is a
 	 *                  mobile UA, which sends youtube.com to m.youtube.com and from there to
 	 *                  an intent:// deep link the Presentation context cannot launch.
@@ -53,7 +53,7 @@ public final class JukeboxBridge {
 
 		// The allowlist stops us navigating to file:// ourselves; these stop the page
 		// reaching for it behind our back, and are the layer the README says is missing
-		// whenever this shim is not in the build.
+		// whenever this plugin is not in the build.
 		settings.setAllowFileAccess(false);
 		settings.setAllowContentAccess(false);
 		settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);

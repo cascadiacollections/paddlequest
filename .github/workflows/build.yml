@@ -46,12 +46,12 @@ jobs:
         run: |
           set -euo pipefail
           pip install --quiet gdtoolkit==4.5.0 ruff==0.14.0
-          for f in scripts/*.gd test/*.gd; do
+          for f in scripts/*.gd test/*.gd addons/xr_webview/*.gd; do
             gdparse "$f" > /dev/null || { echo "::error file=$f::failed to parse"; exit 1; }
           done
           echo "all GDScript parses"
-          gdformat --check scripts/ test/
-          gdlint scripts/ test/
+          gdformat --check scripts/ test/ addons/xr_webview/*.gd
+          gdlint scripts/ test/ addons/xr_webview/*.gd
           ruff check tools/
           ruff format --check tools/
 
@@ -107,7 +107,12 @@ jobs:
         id: addons-cache
         uses: actions/cache@v4
         with:
-          path: addons
+          # Only the two fetched addons. addons/xr_webview is tracked in git,
+          # and caching all of addons/ would restore a stale copy of it over
+          # the checkout on any run where the justfile hash still matched.
+          path: |
+            addons/godotopenxrvendors
+            addons/gut
           key: addons-${{ hashFiles('justfile') }}
 
       - name: Fetch OpenXR vendors addon
@@ -228,20 +233,11 @@ jobs:
 
       # The one check that is not a guess. Godot writes no preset entry for a
       # plugin it has just discovered, defaults it off, and exports a green
-      # APK with the classes absent - and the jukebox panel then comes up with
-      # no JavaScript and nothing in the log to say why. Only the dex knows.
-      - name: Verify the jukebox shim is in the APK
-        run: |
-          set -euo pipefail
-          # Every dex, not just the first: a multidex build is free to put the
-          # class in classes2.dex and a check that only reads classes.dex
-          # would then fail for the wrong reason. -a because dex is binary and
-          # grep otherwise reports a match instead of counting them.
-          count="$(unzip -p build/paddleball-release.apk 'classes*.dex' \
-            | grep -ac JukeboxBridge || true)"
-          [ "$count" -gt 0 ] \
-            || { echo "::error::JukeboxBridge is in no classes*.dex; the panel would ship without JavaScript"; exit 1; }
-          echo "JukeboxBridge present in the dex ($count references)"
+      # APK with the classes absent - and the panel then comes up with no
+      # JavaScript and nothing in the log to say why. Only the dex knows.
+      # Shared with `just verify-shim` so the same check runs locally.
+      - name: Verify the WebView plugin is in the APK
+        run: just verify-shim build/paddleball-release.apk
 
       - name: Verify the APK targets Quest
         run: |
@@ -288,6 +284,23 @@ jobs:
       # download. Draft, so a human decides when it goes out. Uses the gh CLI
       # the runner already ships rather than taking on a third-party action
       # for four lines of work.
+      # The addon on its own, with the AAR already built, so a Godot XR project
+      # can drop it in without Gradle or a checkout of this game.
+      - name: Package the XR Web Panel addon
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          staging="$(mktemp -d)"
+          mkdir -p "$staging/addons"
+          cp -r addons/xr_webview "$staging/addons/"
+          rm -rf "$staging/addons/xr_webview/android/.gradle" \
+                 "$staging/addons/xr_webview/android/build"
+          cp addons/xr_webview/android/build/outputs/aar/xr-webview-release.aar \
+             "$staging/addons/xr_webview/android/"
+          (cd "$staging" && zip -qr xr-webview-addon.zip addons)
+          mv "$staging/xr-webview-addon.zip" build/
+          ls -lh build/xr-webview-addon.zip
+
       - name: Publish the release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
@@ -299,5 +312,6 @@ jobs:
             --generate-notes \
             --title "$GITHUB_REF_NAME" \
             build/paddleball-release.apk \
-            build/paddlequest.arm64
+            build/paddlequest.arm64 \
+            build/xr-webview-addon.zip
           echo "drafted release $GITHUB_REF_NAME"
