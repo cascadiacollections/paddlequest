@@ -212,12 +212,36 @@ jobs:
           GODOT_ANDROID_KEYSTORE_RELEASE_USER: ${{ secrets.ANDROID_KEYSTORE_USER || 'androiddebugkey' }}
           GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || 'android' }}
         run: |
+          set -euo pipefail
           mkdir -p build
-          godot --headless --install-android-build-template \
-            --export-release "Quest" build/paddleball-release.apk || true
+
+          # Split out from the export below, because the shim has to land
+          # between the two: `just shim` copies its AAR into android/plugins/,
+          # and android/ does not exist until the build template is installed.
+          godot --headless --install-android-build-template || true
+          just shim
+
+          godot --headless --export-release "Quest" build/paddleball-release.apk || true
           test -s build/paddleball-release.apk \
             || { echo "::error::export produced no APK"; exit 1; }
           ls -lh build/paddleball-release.apk
+
+      # The one check that is not a guess. Godot writes no preset entry for a
+      # plugin it has just discovered, defaults it off, and exports a green
+      # APK with the classes absent - and the jukebox panel then comes up with
+      # no JavaScript and nothing in the log to say why. Only the dex knows.
+      - name: Verify the jukebox shim is in the APK
+        run: |
+          set -euo pipefail
+          # Every dex, not just the first: a multidex build is free to put the
+          # class in classes2.dex and a check that only reads classes.dex
+          # would then fail for the wrong reason. -a because dex is binary and
+          # grep otherwise reports a match instead of counting them.
+          count="$(unzip -p build/paddleball-release.apk 'classes*.dex' \
+            | grep -ac JukeboxBridge || true)"
+          [ "$count" -gt 0 ] \
+            || { echo "::error::JukeboxBridge is in no classes*.dex; the panel would ship without JavaScript"; exit 1; }
+          echo "JukeboxBridge present in the dex ($count references)"
 
       - name: Verify the APK targets Quest
         run: |

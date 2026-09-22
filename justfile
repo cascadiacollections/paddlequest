@@ -221,7 +221,13 @@ shim:
     #!/usr/bin/env bash
     set -euo pipefail
     cd tools/jukebox-shim
-    JAVA_HOME={{jdk}} ANDROID_HOME=$HOME/Android/Sdk ./gradlew assembleRelease --console=plain -q
+    # Unlike the export recipes, this one has to run on CI too, where the SDK
+    # is wherever the runner put it rather than under $HOME. JAVA_HOME needs
+    # no such treatment: {{jdk}} already falls back to the ambient one when
+    # mise is absent, and preferring the ambient one would hand Gradle the
+    # JDK 25 it does not support on a machine that has both.
+    JAVA_HOME={{jdk}} ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}" \
+      ./gradlew assembleRelease --console=plain -q
     cd ../..
     mkdir -p android/plugins
     cp tools/jukebox-shim/build/outputs/aar/jukebox-shim-release.aar android/plugins/
