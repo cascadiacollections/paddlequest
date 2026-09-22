@@ -63,6 +63,14 @@ const VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY := 1 << 3
 ## Context.DISPLAY_SERVICE.
 const DISPLAY_SERVICE := "display"
 
+## android.view.MotionEvent actions. Spelled out for the same reason the
+## VirtualDisplay flags are: four integers that have not moved since API 1,
+## against one more static field lookup that can fail at runtime.
+const ACTION_DOWN := 0
+const ACTION_UP := 1
+const ACTION_MOVE := 2
+const ACTION_CANCEL := 3
+
 ## Reported density of the virtual display. Only affects how the page sizes
 ## CSS pixels; 320 gives roughly desktop-like layout at 1280x720.
 @export var density_dpi := 320
@@ -202,6 +210,7 @@ var _web_view
 var _presentation
 var _virtual_display
 var _pending_url := ""
+var _touch_down_msec := 0
 
 
 func _ready() -> void:
@@ -308,6 +317,98 @@ func load_url(url: String) -> bool:
 ## Whether there is a live WebView on the compositor's surface.
 func is_live() -> bool:
 	return _web_view != null
+
+
+## Where a point on the panel's surface falls, as 0..1 across the quad.
+##
+## Takes a position in this node's local space - what a raycast gives after
+## to_local(). The quad is centred on its origin in the XY plane, and page
+## coordinates run down from the top left, so y is flipped on the way.
+##
+## Returns values outside 0..1 for a point off the panel; send_touch() refuses
+## those rather than clamping, because a ray that has slid off the edge should
+## stop the drag, not pin it to the border.
+func local_to_uv(local_position: Vector3) -> Vector2:
+	return Vector2(0.5 + local_position.x / quad_size.x, 0.5 - local_position.y / quad_size.y)
+
+
+## Whether a uv from local_to_uv() actually lands on the panel.
+static func uv_is_on_panel(uv: Vector2) -> bool:
+	return uv.x >= 0.0 and uv.x <= 1.0 and uv.y >= 0.0 and uv.y <= 1.0
+
+
+## Deliver a touch to the page. Returns false if it went nowhere.
+##
+## The panel lives on a VirtualDisplay no finger will ever touch, so every
+## event the page sees has to be manufactured: MotionEvent.obtain() builds one
+## and View.dispatchTouchEvent() hands it to the WebView directly. None of this
+## needs the Java plugin - MotionEvent is a framework class the app classloader
+## can see and obtain() is static, so unlike WebSettings it wraps cleanly.
+##
+## Nor does it need the INJECT_EVENTS permission, which guards system-wide
+## injection into other apps' windows; this is our own view hierarchy.
+##
+## A tap is ACTION_DOWN then ACTION_UP at the same point. A drag is DOWN, any
+## number of MOVEs, then UP. ACTION_CANCEL is what to send when the ray leaves
+## the panel mid-drag, so the page does not sit waiting for an UP that has
+## already gone somewhere else.
+func send_touch(action: int, uv: Vector2) -> bool:
+	if not uv_is_on_panel(uv):
+		return false
+	if _web_view == null:
+		return false
+
+	var point := Vector2(uv.x * android_surface_size.x, uv.y * android_surface_size.y)
+	var now := _uptime_msec()
+	if action == ACTION_DOWN:
+		# Every event in a gesture carries the time its DOWN happened. Android
+		# reads the difference as the gesture's duration, which is how a page
+		# tells a tap from a long press and how it derives fling velocity.
+		_touch_down_msec = now
+
+	_run_on_ui_thread(_dispatch_touch.bind(action, point, _touch_down_msec, now))
+	return true
+
+
+## A press and release at one point, which is what a page reads as a click.
+func tap(uv: Vector2) -> bool:
+	return send_touch(ACTION_DOWN, uv) and send_touch(ACTION_UP, uv)
+
+
+## android.os.SystemClock.uptimeMillis(), which is the clock MotionEvent wants.
+##
+## Godot's own tick count starts when the engine does, so gestures built on it
+## would carry timestamps from a different epoch to every other event the page
+## receives. Falls back to it anyway off-device, where nothing dispatches.
+func _uptime_msec() -> int:
+	var clock = JavaClassWrapper.wrap("android.os.SystemClock")
+	if clock == null:
+		return Time.get_ticks_msec()
+	return clock.uptimeMillis()
+
+
+## Runs on the Android UI thread: dispatchTouchEvent has the same thread rule
+## as every other View call here.
+func _dispatch_touch(action: int, point: Vector2, down_msec: int, event_msec: int) -> void:
+	if _web_view == null:
+		return
+
+	var motion_event = JavaClassWrapper.wrap("android.view.MotionEvent")
+	if motion_event == null:
+		push_warning("XRWebPanel: android.view.MotionEvent is unavailable.")
+		return
+
+	var event = motion_event.obtain(down_msec, event_msec, action, point.x, point.y, 0)
+	if event == null:
+		_report_java_exception("building a touch event")
+		return
+
+	_web_view.dispatchTouchEvent(event)
+	# Returned to Android's pool rather than left to the collector: a gesture
+	# is three to dozens of these, and MotionEvent is the allocation Android
+	# most expects to get back.
+	event.recycle()
+	_report_java_exception("dispatching a touch event")
 
 
 func _on_session_begun() -> void:

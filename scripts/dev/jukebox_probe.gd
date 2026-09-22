@@ -28,12 +28,22 @@ extends Node3D
 
 const REFRESH_INTERVAL := 0.5
 
+## How long to let the page settle before the input test fires.
+##
+## Nothing here holds a controller, so the panel is tapped on a timer instead.
+## The embed player toggles play/pause on a click in the middle, which is an
+## effect that can be read from across the room - if the video stops, the
+## MotionEvent reached the page.
+const TAP_AFTER := 12.0
+
 @onready var control_quad: OpenXRCompositionLayerQuad = $XROrigin3D/ControlQuad
 @onready var surface_quad: OpenXRCompositionLayerQuad = $XROrigin3D/SurfaceQuad
 @onready var status: Label3D = $XROrigin3D/Status
 
 var _elapsed := 0.0
 var _viewport_was_null := false
+var _since_ready := 0.0
+var _tap_result := "waiting"
 var _blocked_url := ""
 var _surface_ready := false
 
@@ -62,6 +72,12 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if _surface_ready and _tap_result == "waiting":
+		_since_ready += delta
+		if _since_ready >= TAP_AFTER:
+			var sent: bool = surface_quad.tap(Vector2(0.5, 0.5))
+			_tap_result = "sent, video should pause" if sent else "REFUSED"
+
 	_elapsed += delta
 	if _elapsed < REFRESH_INTERVAL:
 		return
@@ -111,6 +127,7 @@ func _lines() -> PackedStringArray:
 	)
 	lines.append("         android_surface=%s" % ("null" if surface == null else "ok"))
 	lines.append("         webview_live=%s ready=%s" % [surface_quad.is_live(), _surface_ready])
+	lines.append("         tap=%s" % _tap_result)
 	if not _blocked_url.is_empty():
 		lines.append("         BLOCKED %s" % _blocked_url)
 

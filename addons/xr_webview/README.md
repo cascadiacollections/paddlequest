@@ -70,6 +70,22 @@ Signals: `surface_ready`, `navigation_blocked(url)`.
 
 YouTube answers a top-level request to `/embed/` with **Error 153** — no `Referer`, no embedding origin, no player. Leave `use_iframe_embed` on: the panel then serves its own document with `embed_base_url` as its origin and puts the player in an iframe, which is the embedding route YouTube's terms describe.
 
+## Input
+
+The panel lives on a `VirtualDisplay` no finger will ever touch, so touches are manufactured: `MotionEvent.obtain()` builds one and `dispatchTouchEvent()` hands it to the WebView. This needs neither the Android plugin nor the `INJECT_EVENTS` permission — `MotionEvent` is a framework class, and dispatching into your own view hierarchy is not system-wide injection.
+
+Point a ray at the quad, convert the hit to panel coordinates, and send:
+
+```gdscript
+var local := panel.to_local(raycast.get_collision_point())
+var uv := panel.local_to_uv(local)          # 0..1 across the quad, y flipped for the page
+panel.tap(uv)                               # or send_touch(ACTION_DOWN/MOVE/UP, uv)
+```
+
+`tap()` is a press and release at one point, which a page reads as a click. A drag is `ACTION_DOWN`, any number of `ACTION_MOVE`s, then `ACTION_UP`. Send `ACTION_CANCEL` when the ray leaves the panel mid-drag, or the page waits for an `UP` that never comes. `send_touch()` returns `false` for a uv off the panel rather than clamping it to the border.
+
+The quad has no collision shape of its own — give it an `Area3D` with a matching `BoxShape3D`, or intersect the ray with the quad's plane yourself.
+
 ## Debugging
 
 Everything logs to logcat under the `XRWebView` tag, including the page's own JS console, which is the only window into a panel that cannot be inspected any other way:
@@ -84,7 +100,6 @@ Blank panel, in the order worth checking: the plugin is not in the APK (see step
 
 ## Known limits
 
-- **No input yet.** Nothing can press anything, so this shows pages rather than letting anyone drive them. `MotionEvent.obtain()` dispatched from a controller raycast should need no additions to the plugin.
 - **`loadData()` cannot carry `#` or `%`.** It URL-decodes its payload, so `#` truncates the document at that point and `%` reads as an escape — silently, with a blank panel and nothing in the log. Applies to any HTML passed to the panel this way.
 - **Hole punch is untested here.** The verified configuration is `sort_order` overlay without it.
 - **Foveation interacts with composition layers** through shared swapchain setup and has not been exercised.
