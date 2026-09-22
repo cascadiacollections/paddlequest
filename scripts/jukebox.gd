@@ -60,14 +60,23 @@ const DENSITY_DPI := 320
 ## The probe page. No JavaScript, no network, no WebView settings - so if this
 ## does not appear, the surface itself is the problem and nothing else is.
 ## The corner markers double as a flip test; see _show_probe().
+##
+## Written without "#" or "%", which is not a style choice. loadData() puts the
+## payload through URL decoding: "#" starts a fragment and truncates the
+## document there, and "%" is read as an escape. An earlier version of this
+## page used hex colours and "translate(-50%,-50%)" to centre, and drew white
+## on the Quest Pro - the body was cut at the first colour. rgb() and flex
+## centring avoid both characters. loadDataWithBaseURL() would also work, but
+## takes a null base URL that is awkward to pass through JavaClassWrapper.
 const PROBE_HTML := """
-<html><body style="margin:0;background:#101018;color:#eee;font:40px sans-serif">
-<div style="position:absolute;top:0;left:0;background:#33aaff;color:#000;padding:6px 14px">
-TOP LEFT</div>
-<div style="position:absolute;bottom:0;right:0;background:#ffaa33;color:#000;padding:6px 14px">
-BOTTOM RIGHT</div>
-<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">
-jukebox surface OK</div>
+<html><body style="margin:0;height:100vh;display:flex;align-items:center;
+justify-content:center;background:rgb(16,16,24);color:rgb(238,238,238);
+font:40px sans-serif">
+<div style="position:absolute;top:0;left:0;background:rgb(51,170,255);
+color:rgb(0,0,0);padding:6px 14px">TOP LEFT</div>
+<div style="position:absolute;bottom:0;right:0;background:rgb(255,170,51);
+color:rgb(0,0,0);padding:6px 14px">BOTTOM RIGHT</div>
+<div>jukebox surface OK</div>
 </body></html>
 """
 
