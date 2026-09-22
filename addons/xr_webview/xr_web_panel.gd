@@ -96,6 +96,25 @@ const ACTION_CANCEL := 3
 ## CSS pixels; 320 gives roughly desktop-like layout at 1280x720.
 @export var density_dpi := 320
 
+## How long tap() holds the press before releasing, in milliseconds.
+@export var tap_hold_msec := 80.0
+
+## How far a press may wander before it becomes a drag, in surface pixels.
+##
+## A hand holding a ray is never still. Sending every frame's position
+## straight through meant a press travelled ~140px in the 111ms a trigger was
+## held - well past Chromium's own slop threshold, so every tap was read as a
+## scroll and nothing was ever clicked. Below this, movement is swallowed and
+## the release snaps back to where the press started; above it, the gesture is
+## a drag and moves flow normally.
+##
+## Android's ViewConfiguration uses about 8dp - 16px at the density this panel
+## reports - but that is a fingertip resting on glass. A ray held at arm's
+## length wanders further: presses measured on a Quest Pro drifted ~20px in
+## 120ms while trying to hold still, which at 16px turned roughly half of them
+## into drags. Raised accordingly; lower it for a panel within reach.
+@export var touch_slop_px := 24.0
+
 ## The Java shim that reaches what GDScript cannot. See tools/jukebox-shim.
 ##
 ## WebSettings, WebViewClient and WebChromeClient are all unreachable from here
@@ -232,6 +251,8 @@ var _presentation
 var _virtual_display
 var _pending_url := ""
 var _touch_down_msec := 0
+var _touch_origin_px := Vector2.ZERO
+var _past_slop := false
 
 
 func _ready() -> void:
@@ -381,19 +402,44 @@ func send_touch(action: int, uv: Vector2) -> bool:
 
 	var point := Vector2(uv.x * android_surface_size.x, uv.y * android_surface_size.y)
 	var now := _uptime_msec()
-	if action == ACTION_DOWN:
-		# Every event in a gesture carries the time its DOWN happened. Android
-		# reads the difference as the gesture's duration, which is how a page
-		# tells a tap from a long press and how it derives fling velocity.
-		_touch_down_msec = now
+
+	match action:
+		ACTION_DOWN:
+			# Every event in a gesture carries the time its DOWN happened.
+			# Android reads the difference as the gesture's duration, which is
+			# how a page tells a tap from a long press and how it derives
+			# fling velocity.
+			_touch_down_msec = now
+			_touch_origin_px = point
+			_past_slop = false
+		ACTION_MOVE:
+			if not _past_slop:
+				if point.distance_to(_touch_origin_px) < touch_slop_px:
+					# Tremor, not intent. Swallowed so the gesture stays a tap.
+					return false
+				_past_slop = true
+		ACTION_UP:
+			if not _past_slop:
+				# A tap releases where it pressed, however much the hand moved.
+				point = _touch_origin_px
 
 	_run_on_ui_thread(_dispatch_touch.bind(action, point, _touch_down_msec, now))
 	return true
 
 
-## A press and release at one point, which is what a page reads as a click.
+## Press and release at one point, which is what a page reads as a click.
+##
+## The release is held back by tap_hold_msec rather than sent in the same
+## frame. A DOWN and an UP sharing a timestamp is a zero-duration touch, and
+## gesture detectors are entitled to discard it - which looks exactly like
+## input not working at all.
 func tap(uv: Vector2) -> bool:
-	return send_touch(ACTION_DOWN, uv) and send_touch(ACTION_UP, uv)
+	if not send_touch(ACTION_DOWN, uv):
+		return false
+	get_tree().create_timer(tap_hold_msec / 1000.0).timeout.connect(
+		func() -> void: send_touch(ACTION_UP, uv)
+	)
+	return true
 
 
 ## android.os.SystemClock.uptimeMillis(), which is the clock MotionEvent wants.
@@ -424,6 +470,15 @@ func _dispatch_touch(action: int, point: Vector2, down_msec: int, event_msec: in
 		_report_java_exception("building a touch event")
 		return
 
+	var names := {
+		ACTION_DOWN: "DOWN", ACTION_UP: "UP", ACTION_MOVE: "MOVE", ACTION_CANCEL: "CANCEL"
+	}
+	print(
+		(
+			"XRWebPanel: touch %s at %d,%d (held %dms)"
+			% [names.get(action, action), point.x, point.y, event_msec - down_msec]
+		)
+	)
 	_web_view.dispatchTouchEvent(event)
 	# Returned to Android's pool rather than left to the collector: a gesture
 	# is three to dozens of these, and MotionEvent is the allocation Android

@@ -84,6 +84,10 @@ panel.tap(uv)                               # or send_touch(ACTION_DOWN/MOVE/UP,
 
 `tap()` is a press and release at one point, which a page reads as a click. A drag is `ACTION_DOWN`, any number of `ACTION_MOVE`s, then `ACTION_UP`. Send `ACTION_CANCEL` when the ray leaves the panel mid-drag, or the page waits for an `UP` that never comes. `send_touch()` returns `false` for a uv off the panel rather than clamping it to the border.
 
+A press is a tap while it stays within `touch_slop_px` of where it started, and a drag past that. Without it, hand tremor at 90fps turns every tap into a swipe: a trigger held 111ms drifted ~140px, which Chromium read as a scroll, so controls appeared and nothing was ever clicked.
+
+**There is no cursor, and a 3D one will not work.** A composition layer is composited over the eye buffer, so geometry placed at the ray's hit point is drawn *behind* the panel however close it sits. A cursor has to be drawn inside the page - an absolutely positioned element with `pointer-events: none` over the embed, moved with `evaluateJavascript`. Only on your own document; never inside a cross-origin iframe.
+
 The quad has no collision shape of its own — give it an `Area3D` with a matching `BoxShape3D`, or intersect the ray with the quad's plane yourself.
 
 ## Debugging
