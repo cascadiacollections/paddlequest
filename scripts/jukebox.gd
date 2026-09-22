@@ -75,12 +75,6 @@ const DENSITY_DPI := 320
 ## for.
 const BRIDGE_CLASS := "com.cascadiacollections.jukebox.JukeboxBridge"
 
-## Sent instead of the WebView default, which is a mobile user agent.
-##
-## Not cosmetic: under the mobile agent youtube.com redirects to m.youtube.com
-## and from there reaches for an intent:// deep link to hand off to the
-## installed app, which a Presentation has no Activity to launch. That is what
-## left the panel blank the first time a real page was loaded.
 ## The origin the embed document claims to come from.
 ##
 ## YouTube's embed player refuses a top-level request - "Error 153", no Referer
@@ -110,6 +104,12 @@ allow="autoplay; encrypted-media" allowfullscreen src="%s"></iframe>
 </body></html>
 """
 
+## Sent instead of the WebView default, which is a mobile user agent.
+##
+## Not cosmetic: under the mobile agent youtube.com redirects to m.youtube.com
+## and from there reaches for an intent:// deep link to hand off to the
+## installed app, which a Presentation has no Activity to launch. That is what
+## left the panel blank the first time a real page was loaded.
 const DESKTOP_USER_AGENT := (
 	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
 	+ "Chrome/125.0.0.0 Safari/537.36"
@@ -410,12 +410,7 @@ func _show_probe() -> void:
 func _apply_settings() -> void:
 	var bridge = JavaClassWrapper.wrap(BRIDGE_CLASS)
 	if bridge == null:
-		push_warning(
-			(
-				"Jukebox: %s missing; JavaScript stays off. Run `just shim`."
-				% BRIDGE_CLASS
-			)
-		)
+		push_warning("Jukebox: %s missing; JavaScript stays off. Run `just shim`." % BRIDGE_CLASS)
 		return
 
 	bridge.configure(_web_view, allow_autoplay, DESKTOP_USER_AGENT)
