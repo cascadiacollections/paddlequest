@@ -220,13 +220,20 @@ jobs:
           set -euo pipefail
           mkdir -p build
 
-          # Split out from the export below, because the shim has to land
-          # between the two: `just shim` copies its AAR into android/plugins/,
-          # and android/ does not exist until the build template is installed.
-          godot --headless --install-android-build-template || true
+          # The shim first. It makes android/plugins itself, so it does not
+          # need the build template to exist, and the install below leaves
+          # that directory alone - checked, because the plugin would silently
+          # vanish from the APK if it did not.
           just shim
 
-          godot --headless --export-release "Quest" build/paddleball-release.apk || true
+          # Install and export stay one invocation. Split apart,
+          # --install-android-build-template has nothing left to make Godot
+          # quit: it installs the template and then runs the project headless
+          # forever, which hung this job for 13 minutes until it was killed.
+          # --quit is not the fix - it exits before the install happens and
+          # leaves no template at all. Both measured on a clean tree.
+          godot --headless --install-android-build-template \
+            --export-release "Quest" build/paddleball-release.apk || true
           test -s build/paddleball-release.apk \
             || { echo "::error::export produced no APK"; exit 1; }
           ls -lh build/paddleball-release.apk
