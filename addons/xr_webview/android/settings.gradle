@@ -1,0 +1,20 @@
+// Standalone, and deliberately not part of the Godot Android build template
+// under android/, which the engine generates and overwrites. `just shim` builds
+// the AAR here and installs it into res://android/plugins, the one directory
+// the Android exporter scans for .gdap descriptors.
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = 'xr-webview'

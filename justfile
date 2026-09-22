@@ -188,3 +188,71 @@ wifi-connect ip:
 wifi-off:
     adb disconnect
     adb usb
+
+# --- Jukebox probe ----------------------------------------------------
+# Deploys scenes/dev/jukebox_probe.tscn in place of the game: two composition
+# layer quads side by side, one fed by a SubViewport and one by an Android
+# surface, with the state that print() does not reach logcat on a Label3D
+# between them. Debugging aid for the panel, not something to ship.
+#
+# project.godot is a tracked file, so the main scene swap is reverted on the
+# way out - including if this is interrupted mid-build.
+probe:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "$(git status --porcelain project.godot)" ]; then
+      echo "project.godot has uncommitted changes; commit or stash first"
+      exit 1
+    fi
+    trap 'git checkout -- project.godot' EXIT INT TERM
+    sed -i 's|^run/main_scene=.*|run/main_scene="res://scenes/dev/jukebox_probe.tscn"|' project.godot
+    just build
+    just install
+    {{adb}} shell am force-stop com.cascadiacollections.paddlequest
+    just run
+
+# Build the addon's Android plugin and install it where the export looks.
+#
+# WebSettings, WebViewClient and WebChromeClient cannot be reached from
+# GDScript - see addons/xr_webview/android - so the panel needs this AAR in the
+# build before JavaScript can be turned on. res://android/plugins is the only
+# directory the Android exporter scans for .gdap descriptors, and it is
+# generated and gitignored, so a fresh clone runs this the way it runs
+# `just setup`. CI runs it too; without it the export quietly ships a panel
+# that cannot run JavaScript.
+shim:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd addons/xr_webview/android
+    # Unlike the export recipes, this one has to run on CI too, where the SDK
+    # is wherever the runner put it rather than under $HOME. JAVA_HOME needs
+    # no such treatment: {{jdk}} already falls back to the ambient one when
+    # mise is absent, and preferring the ambient one would hand Gradle the
+    # JDK 25 it does not support on a machine that has both.
+    JAVA_HOME={{jdk}} ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}" \
+      ./gradlew assembleRelease --console=plain -q
+    cd ../../..
+    mkdir -p android/plugins
+    cp addons/xr_webview/android/build/outputs/aar/xr-webview-release.aar android/plugins/
+    cp addons/xr_webview/android/XRWebView.gdap android/plugins/
+    ls -lh android/plugins/
+
+# Prove the Android plugin actually reached the APK.
+#
+# Godot detects a .gdap, writes no entry for it in the export preset, defaults
+# it to off, and exports successfully with the class absent - a green build and
+# a panel with no JavaScript. Reading the dex is the only honest check.
+verify-shim target=apk:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Every dex, not just the first: a multidex build is free to put the class
+    # in classes2.dex, and a check that only reads classes.dex would then fail
+    # for the wrong reason. -a because dex is binary and grep otherwise reports
+    # a match instead of counting them.
+    count="$(unzip -p {{target}} 'classes*.dex' | grep -ac XRWebViewBridge || true)"
+    if [ "$count" -eq 0 ]; then
+      echo "XRWebViewBridge is in no classes*.dex of {{target}}; the panel would"
+      echo "ship without JavaScript. Check plugins/XRWebView=true in export_presets.cfg."
+      exit 1
+    fi
+    echo "XRWebViewBridge present in the dex ($count references)"
