@@ -61,6 +61,60 @@ const DISPLAY_SERVICE := "display"
 ## CSS pixels; 320 gives roughly desktop-like layout at 1280x720.
 const DENSITY_DPI := 320
 
+## The Java shim that reaches what GDScript cannot. See tools/jukebox-shim.
+##
+## WebSettings, WebViewClient and WebChromeClient are all unreachable from here
+## - the first because its concrete class lives in the WebView provider's
+## classloader, the other two because they are classes rather than
+## single-method interfaces, so create_sam_callback cannot stand in. The shim
+## takes the WebView as an argument and returns nothing, so the objects that
+## cannot be wrapped never cross back.
+##
+## Built by `just shim` into android/plugins/. Absent from the build, the panel
+## still runs - it just cannot turn JavaScript on, which is what probe_only is
+## for.
+const BRIDGE_CLASS := "com.cascadiacollections.jukebox.JukeboxBridge"
+
+## Sent instead of the WebView default, which is a mobile user agent.
+##
+## Not cosmetic: under the mobile agent youtube.com redirects to m.youtube.com
+## and from there reaches for an intent:// deep link to hand off to the
+## installed app, which a Presentation has no Activity to launch. That is what
+## left the panel blank the first time a real page was loaded.
+## The origin the embed document claims to come from.
+##
+## YouTube's embed player refuses a top-level request - "Error 153", no Referer
+## and no embedding origin - so the panel serves its own page and puts the
+## player in an iframe, which is the embedding route YouTube's terms describe.
+## This is the origin that page reports and the Referer the player sees, so it
+## has to be a real https URL rather than about:blank or a data document.
+const EMBED_BASE_URL := "https://cascadiacollections.github.io/paddlequest/"
+
+## The page the panel serves to host an embed.
+##
+## Sized in viewport units, not pixels. DENSITY_DPI is 320, so the virtual
+## display reports a device pixel ratio of 2 and a 1280x720 surface is a
+## 640x360 CSS viewport - an iframe asked for 1280x720 comes out at twice the
+## panel and the player is cropped to its top-left quarter. vw/vh track
+## whatever the viewport turns out to be, and cost nothing if DENSITY_DPI
+## changes later.
+##
+## No "#" or "%" outside the format specifier, for the reason PROBE_HTML
+## carries at length - which is also why the sizes are vw/vh rather than the
+## percentages this would otherwise be written with.
+const EMBED_TEMPLATE := """
+<html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+</head><body style="margin:0;background:rgb(0,0,0);overflow:hidden">
+<iframe style="border:0;position:absolute;top:0;left:0;width:100vw;height:100vh"
+allow="autoplay; encrypted-media" allowfullscreen src="%s"></iframe>
+</body></html>
+"""
+
+const DESKTOP_USER_AGENT := (
+	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+	+ "Chrome/125.0.0.0 Safari/537.36"
+)
+
 ## The probe page. No JavaScript, no network, no WebView settings - so if this
 ## does not appear, the surface itself is the problem and nothing else is.
 ## The corner markers double as a flip test; see _show_probe().
@@ -93,7 +147,7 @@ color:rgb(0,0,0);padding:6px 14px">BOTTOM RIGHT</div>
 ## path in one go: surface, orientation, and hardware decode. It is Blender's
 ## Big Buck Bunny at 4K60 (CC-BY), which is the same film GodotVR's
 ## android-surface example ships, and it needs no account.
-@export var home_url := "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
+@export var home_url := "https://www.youtube.com/embed/aqz-KE-bpKQ?autoplay=1&playsinline=1&rel=0"
 
 ## Hosts this panel may visit, matched on the registrable host and any
 ## subdomain of it. A browser in a social VR app is a screen a player can put
@@ -123,7 +177,14 @@ color:rgb(0,0,0);padding:6px 14px">BOTTOM RIGHT</div>
 ## thing still unknown - whether the compositor surface is alive.
 ##
 ## Turn this off once a settings shim exists.
-@export var probe_only := true
+@export var probe_only := false
+
+## Serve home_url inside an iframe on our own page rather than navigating to it.
+##
+## On for the embed players this panel exists to show. Off navigates directly,
+## which is right for an ordinary page and wrong for anything that checks who
+## is embedding it.
+@export var use_iframe_embed := true
 
 ## Java proxies handed to the UI thread that have not run yet. Nothing else on
 ## our side holds them, and a collected callback is a panel that never appears
@@ -347,21 +408,36 @@ func _show_probe() -> void:
 ## what a Kotlin shim would replace - see the README. Called last, and only
 ## when probe_only is off, so that its failure costs nothing already drawn.
 func _apply_settings() -> void:
-	var settings = _web_view.getSettings()
-	settings.setJavaScriptEnabled(true)
-	settings.setDomStorageEnabled(true)
-	settings.setMediaPlaybackRequiresUserGesture(not allow_autoplay)
-	# The allowlist stops us navigating to file:// ourselves; these would stop
-	# the page reaching for it behind our back. On Android P and up they are
-	# not reached, so that second layer is not in effect - the README says so
-	# rather than claiming a defence that is not running.
-	settings.setAllowFileAccess(false)
-	settings.setAllowContentAccess(false)
+	var bridge = JavaClassWrapper.wrap(BRIDGE_CLASS)
+	if bridge == null:
+		push_warning(
+			(
+				"Jukebox: %s missing; JavaScript stays off. Run `just shim`."
+				% BRIDGE_CLASS
+			)
+		)
+		return
+
+	bridge.configure(_web_view, allow_autoplay, DESKTOP_USER_AGENT)
+	# Enforced in Java as well as at load_url(), because a link the page itself
+	# follows never passes through GDScript to be checked.
+	bridge.installClients(_web_view, ",".join(allowed_hosts))
+	_report_java_exception("applying settings")
 
 
 func _load_pending() -> void:
-	if _web_view != null and not _pending_url.is_empty():
-		_web_view.loadUrl(_pending_url)
+	if _web_view == null or _pending_url.is_empty():
+		return
+
+	if use_iframe_embed:
+		var bridge = JavaClassWrapper.wrap(BRIDGE_CLASS)
+		if bridge != null:
+			var html := EMBED_TEMPLATE % _pending_url
+			bridge.loadEmbed(_web_view, EMBED_BASE_URL, html)
+			_report_java_exception("loading the embed document")
+			return
+
+	_web_view.loadUrl(_pending_url)
 
 
 func _get_activity():

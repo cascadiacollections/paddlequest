@@ -210,3 +210,19 @@ probe:
     just install
     {{adb}} shell am force-stop com.cascadiacollections.paddlequest
     just run
+
+# Build the WebView shim and install it where the Android export looks.
+#
+# WebSettings, WebViewClient and WebChromeClient cannot be reached from
+# GDScript - see tools/jukebox-shim - so the jukebox panel needs this AAR in
+# the build before JavaScript can be turned on. Gitignored along with the rest
+# of android/, so a fresh clone runs this the way it runs `just setup`.
+shim:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd tools/jukebox-shim
+    JAVA_HOME={{jdk}} ANDROID_HOME=$HOME/Android/Sdk ./gradlew assembleRelease --console=plain -q
+    cd ../..
+    mkdir -p android/plugins
+    cp tools/jukebox-shim/build/outputs/aar/jukebox-shim-release.aar android/plugins/
+    ls -lh android/plugins/

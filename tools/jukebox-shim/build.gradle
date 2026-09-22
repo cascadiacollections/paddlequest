@@ -1,0 +1,20 @@
+// Versions track android/build/config.gradle, which the Godot export template
+// generates - a library compiled against a newer SDK than the app that loads it
+// is a runtime surprise waiting to happen.
+plugins {
+    id 'com.android.library' version '8.6.1'
+}
+
+android {
+    namespace 'com.cascadiacollections.jukebox'
+    compileSdk 36
+
+    defaultConfig {
+        minSdk 24
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
