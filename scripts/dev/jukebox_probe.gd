@@ -33,11 +33,23 @@ const REFRESH_INTERVAL := 0.5
 @onready var status: Label3D = $XROrigin3D/Status
 
 var _elapsed := 0.0
+var _viewport_was_null := false
 var _blocked_url := ""
 var _surface_ready := false
 
 
 func _ready() -> void:
+	# Assigned here rather than trusted to the scene file, and before
+	# XRBoot.start() rather than after. layer_viewport is an object property
+	# serialised as a NodePath, and this scene was hand-written rather than
+	# saved by the editor. Order matters: set_layer_viewport() only allocates
+	# the layer's swapchain when _should_register() passes, and that requires
+	# the layer not to be registered yet - once the session has begun it is,
+	# and a later assignment is silently ignored.
+	if control_quad.layer_viewport == null:
+		_viewport_was_null = true
+		control_quad.layer_viewport = $XROrigin3D/ControlQuad/SubViewport
+
 	XRBoot.start(get_viewport())
 
 	# Both signals report into the label rather than the log, since this whole
@@ -81,6 +93,12 @@ func _lines() -> PackedStringArray:
 		(
 			"CONTROL  native=%s visible=%s"
 			% [control_quad.is_natively_supported(), control_quad.is_visible_in_tree()]
+		)
+	)
+	lines.append(
+		(
+			"         viewport=%s scene_was_null=%s"
+			% ["null" if control_quad.layer_viewport == null else "set", _viewport_was_null]
 		)
 	)
 
