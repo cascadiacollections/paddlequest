@@ -99,10 +99,11 @@ Raising `WallTarget` and `ServePoint` pushes the action up out of view.
 A web page on the left wall, drawn by the XR compositor rather than by us.
 `scripts/jukebox.gd`, wired to the `Jukebox` node under `XROrigin3D`.
 
-**Partly verified on a Quest Pro** (Horizon OS, Godot 4.7.2, vendors 5.1.0).
-The compositor half works. The WebView half does not put anything on the
-panel yet, and one of the design claims below did not survive contact with
-Android. See **Where it actually stands** at the end of this section.
+**Working on a Quest Pro** (Horizon OS, Godot 4.7.2, vendors 5.1.0): a live
+Android WebView draws into a compositor-owned swapchain and reads correctly
+through the headset. It is not a jukebox yet — one of the design claims below
+did not survive contact with Android, and the WebView settings a real page
+needs still want a Kotlin shim. See **Where it actually stands**.
 
 The usual way to put a web page in a VR game is to render an Android WebView
 to a texture and map it onto a quad. That copies the page every frame, samples
@@ -133,18 +134,22 @@ What it costs, and what to look at first in the headset:
 - `XR_KHR_android_surface_swapchain` is implemented inconsistently — the
   Oculus runtime flips the surface under the GL drivers, Pico flips under
   Vulkan. `Jukebox.needs_vertical_flip` encodes both. Quest on the mobile
-  (Vulkan) renderer, which is what this project ships, should need no flip;
-  if the page comes up upside down, that is the first thing that is wrong.
+  (Vulkan) renderer, which is what this project ships, needs no flip -
+  confirmed on a Quest Pro from the probe page's corner markers.
 - Foveation is already off in this project (see `project.godot`) because
   level 2 blacks out the view on this Quest Pro. Composition layers and
   foveation share swapchain setup, so expect to re-test that interaction.
 
 **Nothing injects input yet.** A controller ray has no way to press anything
 on the page — that was never part of the spike. So `home_url` defaults to a
-video rather than a home page: it starts on its own and exercises the whole
-path at once, surface through hardware decode, instead of proving only that
-the surface is alive. It is Blender's Big Buck Bunny at 4K60 (CC-BY), no
-account needed. Point it anywhere inside `allowed_hosts` from the inspector.
+video rather than a home page: it would start on its own and exercise the
+whole path at once, surface through hardware decode. Blender's Big Buck Bunny
+at 4K60 (CC-BY), no account needed. Point it anywhere inside `allowed_hosts`
+from the inspector.
+
+It has never rendered, though. `probe_only` is on because the settings a real
+page needs cannot be applied, so that default is aspirational until a shim
+exists - see below.
 
 Navigation is allow-listed (`allowed_hosts`), https-only, and fails closed on
 an empty list. This is not paranoia about our own code: a browser in a VR app
@@ -206,12 +211,34 @@ is assigned before the failing call, so the later swapchain still comes up at
 the right size, and the grey panel is fully explained by the settings abort
 above. That is a reading of the engine source, not a measurement.
 
-**Open — is the surface alive?** Nothing has yet drawn into it, so the two
-candidate explanations for a grey panel are still both standing. `probe_only`
-is on by default and loads a page needing no JavaScript, no network and no
-settings. If it appears, the surface works and only the shim is missing. If it
-does not, the swapchain is the real problem. Its corner markers read out the
-vertical flip at the same time, which is the other thing still untested.
+**Answered — the surface is alive.** `probe_only` drew on the Quest Pro:
+`android_surface=ok`, `webview_live=true`, page pixels on the quad, with
+`FPS=90/90` and `Stale=0` while the layer was submitted. The corner markers
+came up the right way round, so `needs_vertical_flip()` has the Oculus plus
+Vulkan case right and no flip is needed here. The deferred signals arrive too.
+
+Three faults hid each other on the way there. The `getSettings()` abort came
+first. Then `loadData()` ate the probe page: it URL-decodes its payload, so
+`#` opened a fragment and truncated the document at the first hex colour, and
+`%` read as an escape. The page drew white, with no exception and nothing in
+the log. `rgb()` and flex centring avoid both characters, and a test pins
+them, because **any** HTML this panel loads through `loadData()` carries the
+same constraint and the same silent failure. Last, the probe scene's own
+control quad had no `layer_viewport`: it is an object property serialised as a
+`NodePath`, the scene was hand-written rather than saved by the editor, and
+the path never resolved - so the simple path sat dark while the exotic one
+worked.
+
+**Still unproven.** JavaScript, DOM storage and autoplay, so `home_url` has
+never rendered and the YouTube default is aspirational. `setAllowFileAccess`
+and `setAllowContentAccess`, as above. Hole punch - the working configuration
+is `sort_order` overlay without it, so the caveat further up is neither
+confirmed nor refuted. The foveation interaction. And real content: video
+decode, which is the entire point of the approach, is unmeasured.
+
+To pick this up: `just probe` puts the two quads and the state readout in
+front of you, and clearing `probe_only` in the inspector switches the
+surface-fed quad to `home_url` once the settings can actually be applied.
 
 ## Headset setup for development
 

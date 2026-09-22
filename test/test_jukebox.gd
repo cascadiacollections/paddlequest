@@ -46,6 +46,17 @@ func test_the_probe_page_needs_nothing_the_panel_cannot_do() -> void:
 	assert_true(Jukebox.PROBE_HTML.contains("BOTTOM RIGHT"), "and one to read it against")
 
 
+func test_the_probe_page_survives_what_load_data_does_to_it() -> void:
+	# loadData() URL-decodes its payload: '#' opens a fragment and truncates the
+	# document there, '%' reads as an escape. A page with hex colours and
+	# translate(-50%,-50%) drew white on the Quest Pro, cut at the first colour,
+	# and nothing said so - no exception, no log, just an empty document on the
+	# surface. Pinned because that failure is invisible from here and costs a
+	# headset session to rediscover.
+	assert_false(Jukebox.PROBE_HTML.contains("#"), "no '#' - it truncates the document")
+	assert_false(Jukebox.PROBE_HTML.contains("%"), "no '%' - it is read as an escape")
+
+
 func test_the_home_url_is_one_the_allowlist_admits() -> void:
 	# A default that the node's own allowlist refuses is a panel that ships
 	# blank, and the warning for it only appears on a headset.

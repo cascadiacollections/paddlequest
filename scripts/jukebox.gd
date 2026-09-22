@@ -25,9 +25,13 @@ extends OpenXRCompositionLayerQuad
 ## punches through things it should not, turn enable_hole_punch off and accept
 ## that it draws over the court.
 ##
-## All of this is GDScript. Implementing java.lang.Runnable from a Callable
-## (JavaClassWrapper.create_sam_callback) arrived in Godot 4.7, and it was the
-## last thing that would have forced a Gradle-built Kotlin plugin.
+## Implementing java.lang.Runnable from a Callable
+## (JavaClassWrapper.create_sam_callback) arrived in Godot 4.7, which removed
+## the last known reason to need a Gradle-built Kotlin plugin. It was not the
+## last reason: getSettings() cannot be wrapped at all on Android P and up, so
+## the settings in _apply_settings() still want a shim. Everything else here
+## is GDScript, and the panel has been seen drawing a live page on a Quest Pro
+## without one.
 ##
 ## Where the node sits, since a .tscn cannot keep a comment past the first
 ## time someone opens the scene in the editor and saves it: the panel is flat
