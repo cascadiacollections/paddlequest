@@ -97,20 +97,41 @@ Raising `WallTarget` and `ServePoint` pushes the action up out of view.
 ### The jukebox panel (spike)
 
 A web page on the left wall, drawn by the XR compositor rather than by us.
-`scripts/jukebox.gd`, wired to the `Jukebox` node under `XROrigin3D`.
+
+Everything reusable lives in `addons/xr_webview` — `XRWebPanel`, plus the
+Android plugin it needs — so it can be revised, and eventually shipped to
+other Godot XR projects, without touching the game. `scripts/jukebox.gd` is
+what is true of this court: the video it opens on, the hosts it allows, and
+where it hangs. It is wired to the `Jukebox` node under `XROrigin3D`.
 
 **Working on a Quest Pro** (Horizon OS, Godot 4.7.2, vendors 5.1.0): a live
-Android WebView draws into a compositor-owned swapchain and reads correctly
-through the headset. It is not a jukebox yet — one of the design claims below
-did not survive contact with Android, and the WebView settings a real page
-needs still want a Kotlin shim. See **Where it actually stands**.
+Android WebView draws into a compositor-owned swapchain, plays YouTube with
+JavaScript, and answers a controller — taps toggle playback, drags seek the
+timeline. It took the Gradle-built shim this spike set out to avoid
+(`addons/xr_webview`), and one of the design claims below did not survive
+contact with Android at all. See **Where it actually stands**.
 
 The usual way to put a web page in a VR game is to render an Android WebView
-to a texture and map it onto a quad. That copies the page every frame, samples
-it through the eye buffer — which is why in-game browsers look mushy next to
-the system one — and cannot show DRM-protected content at all, because
-protected surfaces never capture. For a jukebox that last point is the whole
-game: YouTube and Spotify are exactly what will not come through.
+to a texture and map it onto a quad. That copies the page every frame and
+samples it through the eye buffer, which is why in-game browsers look mushy
+next to the system one. It also cannot show DRM-protected content at all,
+because protected surfaces never capture.
+
+**This approach does not fix the DRM half, and that was the original premise.**
+Measured on a Quest Pro: `protected_content` does make the runtime allocate a
+protected swapchain — logcat says `creating as protected resource` — but
+nothing we own may fill it. A protected swapchain wants a secure producer, and
+asking for a secure `VirtualDisplay` throws `SecurityException: Requires
+CAPTURE_SECURE_VIDEO_OUTPUT or an appropriate MediaProjection token`. That
+permission is signature-level, so a normal app cannot hold it; without the flag
+the panel draws a placeholder instead of the page. Both ways closed. Widevine
+would need a browser rendering to the surface directly rather than through a
+`VirtualDisplay` — a native Chromium embedding, not GDScript. Leave
+`protected_content` off.
+
+What does survive is the rest of it, and it is still the reason to build it
+this way: text at panel resolution rather than through the eye buffer,
+hardware video decode, and nothing on the frame budget.
 
 This uses `OpenXRCompositionLayer.use_android_surface` instead, which asks the
 runtime (`XR_KHR_android_surface_swapchain`) for an `android.view.Surface`
@@ -121,8 +142,10 @@ video decode, nothing on the frame budget.
 
 It was meant to be all GDScript. Implementing `java.lang.Runnable` from a
 `Callable` (`JavaClassWrapper.create_sam_callback`) landed in Godot 4.7, and
-that removed the last *known* reason to need a Gradle-built Kotlin plugin.
-A second one turned up on the device; see below.
+that removed the last *known* reason to need a Gradle-built plugin. A second
+one turned up on the device — `getSettings()` cannot be wrapped at all — so
+there is a small Java shim after all, in `addons/xr_webview/android`. Build it
+with `just shim`; see below for why it cannot be avoided.
 
 What it costs, and what to look at first in the headset:
 
@@ -133,23 +156,29 @@ What it costs, and what to look at first in the headset:
   draws over the court.
 - `XR_KHR_android_surface_swapchain` is implemented inconsistently — the
   Oculus runtime flips the surface under the GL drivers, Pico flips under
-  Vulkan. `Jukebox.needs_vertical_flip` encodes both. Quest on the mobile
+  Vulkan. `XRWebPanel.needs_vertical_flip` encodes both. Quest on the mobile
   (Vulkan) renderer, which is what this project ships, needs no flip -
   confirmed on a Quest Pro from the probe page's corner markers.
 - Foveation is already off in this project (see `project.godot`) because
   level 2 blacks out the view on this Quest Pro. Composition layers and
   foveation share swapchain setup, so expect to re-test that interaction.
 
-**Nothing injects input yet.** A controller ray has no way to press anything
-on the page — that was never part of the spike. So `home_url` defaults to a
-video rather than a home page: it would start on its own and exercise the
-whole path at once, surface through hardware decode. Blender's Big Buck Bunny
-at 4K60 (CC-BY), no account needed. Point it anywhere inside `allowed_hosts`
-from the inspector.
+**Input works.** A ray is intersected with the quad's plane and the trigger
+becomes `MotionEvent`s dispatched straight at the WebView — no shim needed for
+this part, since `MotionEvent` is a framework class GDScript can wrap. Taps
+toggle playback, drags seek the timeline, both on the device.
 
-It has never rendered, though. `probe_only` is on because the settings a real
-page needs cannot be applied, so that default is aspirational until a shim
-exists - see below.
+Movement under `touch_slop_px` is swallowed so a press stays a tap. Without
+that, hand tremor at 90fps drifted a held press ~140px, which Chromium read as
+a scroll: the player showed its controls and nothing was ever clicked.
+
+There is no cursor, and a 3D one cannot work — a composition layer composites
+over the eye buffer, so a marker at the ray's hit point draws behind the panel
+however close it sits. It has to be drawn inside the page; see issue #19.
+
+`home_url` defaults to a video: Blender's Big Buck Bunny at 4K60 (CC-BY), no
+account needed, served through the embed player. Point it anywhere inside
+`allowed_hosts` from the inspector.
 
 Navigation is allow-listed (`allowed_hosts`), https-only, and fails closed on
 an empty list. This is not paranoia about our own code: a browser in a VR app
@@ -158,11 +187,14 @@ store-review problem before it is a moderation one, and a WebView will happily
 follow `file://` straight into `user://progress.cfg`.
 
 That allowlist governs where *we* navigate. `setAllowFileAccess(false)` and
-`setAllowContentAccess(false)` were meant to stop the *page* reaching for
-`file://` behind our back — and on Android P and up **they are not being
-applied**, for the reason in blocker 1 below. Both are at WebView defaults, so
-file access is on. The allowlist still holds; the second layer does not exist
-yet. Do not ship this panel to anyone until it does.
+`setAllowContentAccess(false)` stop the *page* reaching for `file://` behind
+our back, and both are applied now that the shim can reach `WebSettings`. The
+allowlist is enforced in Java as well, on `shouldOverrideUrlLoading`, because a
+link the page itself follows never passes through GDScript to be checked.
+
+Build without the shim and none of that is in force: the panel still runs, but
+with JavaScript off and file access at WebView defaults. `just verify-shim`
+reads the APK's dex and fails if the plugin is missing, and CI runs it.
 
 This is the one thing under `scripts/` that knows what headset it is on, which
 is a real exception to the claim in **Targets** below. The runtime sniffing is
@@ -179,7 +211,8 @@ frame budget" holds. The `VirtualDisplay` is created as the system sees it
 (`displayId 24, FLAG_PRESENTATION, real 1280 x 720`), Chromium initialises
 in-process, and `create_sam_callback` delivers the Runnable to the UI thread.
 
-**Blocker — `getSettings()` is unreachable from GDScript.** Since Android P
+**Resolved, but only with a shim — `getSettings()` is unreachable from
+GDScript.** Since Android P
 the WebView implementation lives in its own classloader. `WebSettings` is
 abstract and the instance behind it is
 `com.android.webview.chromium.ContentSettingsAdapter`, which the app
@@ -189,10 +222,22 @@ call raises `Invalid call. Nonexistent function 'getSettings'`. Reflection is
 no way out — `Method.invoke()` hands the same unwrappable object back across
 the same boundary.
 
-That means no JavaScript, no DOM storage, no autoplay, and none of the file
-access lockdown. **It takes the Kotlin shim this spike set out to avoid.**
-A few lines — take a `WebView`, apply the settings on the Java side, return
-nothing — but it is a Gradle-built AAR, and that is the honest cost.
+That meant no JavaScript, no DOM storage, no autoplay and none of the file
+access lockdown. **It took the Gradle-built shim this spike set out to avoid**
+— `addons/xr_webview/android`, a 5KB AAR, and that is the honest cost.
+
+The trick is that the unwrappable object never has to cross: `JavaClassWrapper`
+only fails on *returning* one, and passing a `WebView` in is fine, because
+`android.webkit.WebView` is a framework class the app classloader does see. So
+every method takes the WebView and returns void, and `ContentSettingsAdapter`
+stays in Java. `WebViewClient` and `WebChromeClient` live there too, for a
+different reason: they are classes rather than single-method interfaces, so
+`create_sam_callback` cannot stand in for them.
+
+One trap worth repeating, because the build stays green through it: Godot
+detects a `.gdap`, writes no entry for it in the export preset, defaults it
+off, and exports an APK with the classes absent. The preset needs
+`plugins/XRWebView=true`, and the only honest check is the dex.
 
 Two knock-on fixes are in: the settings call now happens last, so its failure
 no longer takes `setContentView()` and `show()` with it, and `surface_ready`
@@ -229,12 +274,23 @@ control quad had no `layer_viewport`: it is an object property serialised as a
 the path never resolved - so the simple path sat dark while the exotic one
 worked.
 
-**Still unproven.** JavaScript, DOM storage and autoplay, so `home_url` has
-never rendered and the YouTube default is aspirational. `setAllowFileAccess`
-and `setAllowContentAccess`, as above. Hole punch - the working configuration
-is `sort_order` overlay without it, so the caveat further up is neither
-confirmed nor refuted. The foveation interaction. And real content: video
-decode, which is the entire point of the approach, is unmeasured.
+**Answered since — a real page, and input.** With the shim in the build,
+JavaScript, DOM storage and autoplay all work, and the YouTube embed plays on
+the layer. Two more faults were in the way. A top-level request to `/embed/`
+comes back as "Error 153" — the player wants a `Referer` and an embedding
+origin, so the panel serves its own document and puts the player in an iframe.
+And the video arrived cropped to its top-left quarter: `density_dpi` is 320, so
+a 1280x720 surface is a 640x360 CSS viewport, and an iframe sized in pixels is
+twice the panel. It is sized in `vw`/`vh` now.
+
+**Closed — DRM.** Not a gap to fill but a dead end, measured both ways; see the
+top of this section.
+
+**Still unproven.** Hole punch — the working configuration is `sort_order`
+overlay without it, so the caveat further up is neither confirmed nor refuted.
+The foveation interaction. Keyboard input, which rules out search, and search
+is most of what a jukebox is. And `xr-webview-addon.zip`, which is only built
+on a `v*` tag and has never been produced. Tracked in issue #19.
 
 To pick this up: `just probe` puts the two quads and the state readout in
 front of you, and clearing `probe_only` in the inspector switches the
