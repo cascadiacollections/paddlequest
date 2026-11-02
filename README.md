@@ -417,6 +417,12 @@ Quest VR entry points before uploading the artifact.
 was verified to produce a working toolchain, but note it cannot help with the
 headset half of the loop - deploying and testing still needs local USB.
 
+Godot 4.8 beta 2 is an opt-in trial, not the pin. `just trial-48` (or the
+**Godot 4.8 beta 2 trial** workflow, which is `workflow_dispatch` only) imports,
+tests and exports a copy of the project on 4.8-beta2 with matching templates,
+and compares sizes with the stable pin. It does not replace `godot` on `PATH`.
+Results and the device checklist are in `docs/godot-4.8-beta2-trial.md`.
+
 Pushing a tag matching `v*` drafts a GitHub Release with both builds
 attached, using the `gh` CLI the runner already ships. It is a draft, so a
 human decides when it goes out. A tagged build **fails** rather than warns

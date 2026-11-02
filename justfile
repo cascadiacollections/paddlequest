@@ -61,6 +61,12 @@ paddle:
 test:
     godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://test -gexit -gprefix=test_
 
+# Opt-in Godot 4.8-beta2 trial. Downloads that editor and its matching
+# templates into a cache, and does not install them over `godot` on PATH.
+# Editor, CI and exports stay on the pin in build.yml and the devcontainer.
+trial-48:
+    bash tools/godot_48_trial.sh
+
 # Prove the suite can fail by reintroducing the serve-sag bug.
 # Restores via git rather than a temp copy: if this is interrupted mid-run,
 # `git checkout -- scripts/ball.gd` always puts the tree back. An earlier
