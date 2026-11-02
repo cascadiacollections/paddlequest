@@ -1,0 +1,36 @@
+name: Godot 4.8 beta 2 trial
+
+# Opt-in. workflow_dispatch only, so it is not part of the pull-request or
+# push build and cannot fail the stable gate. The stable editor, templates
+# and exports stay on GODOT_VERSION in build.yml.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trial:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # The hosted runner already has an Android SDK. Point at it the same
+      # way the stable workflow does; the trial does not install a second one.
+      - name: Report Android SDK
+        run: echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+
+      - name: Cache trial downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/paddlequest/godot-trial/downloads
+          key: godot-trial-4.8-beta2-${{ hashFiles('tools/godot_48_trial.sh', '.github/workflows/build.yml', '.devcontainer/Dockerfile') }}
+
+      - name: Run the 4.8-beta2 trial
+        run: bash tools/godot_48_trial.sh
