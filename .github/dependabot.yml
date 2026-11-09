@@ -1,0 +1,20 @@
+version: 2
+# Each release waits 7 days in case it is yanked; security updates are not
+# grouped or delayed.
+#
+# GitHub Actions only. Left out on purpose:
+# - gradle (addons/xr_webview/android): its plugin and SDK versions track the
+#   config.gradle Godot's export template generates and move with Godot
+#   (see the comment in build.gradle), not on Dependabot's schedule.
+# - docker (.devcontainer/Dockerfile): the base image tag picks the distro the
+#   JDK and Godot install steps are written for.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]
