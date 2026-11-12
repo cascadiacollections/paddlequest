@@ -119,6 +119,19 @@ jobs:
         if: steps.addons-cache.outputs.cache-hit != 'true'
         run: just setup
 
+      # Gradle's distribution and dependency cache, shared by the XRWebView
+      # shim build and Godot's own Android export: both run Gradle against the
+      # same ~/.gradle. Keyed on the Godot version too, because the export's
+      # dependency graph comes from Godot's build template, not from anything
+      # in the checkout. A miss costs nothing beyond today's uncached build.
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ env.GODOT_VERSION }}-${{ hashFiles('addons/xr_webview/android/**/*.gradle', 'addons/xr_webview/android/gradle.properties', 'addons/xr_webview/android/gradle/wrapper/gradle-wrapper.properties') }}
+
       # A real signing identity if one is configured, a throwaway otherwise.
       # The throwaway is regenerated every run, so no two CI builds share a
       # signature: fine for `adb install`, useless for distribution, because
