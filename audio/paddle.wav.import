@@ -2,13 +2,13 @@
 
 importer="wav"
 type="AudioStreamWAV"
-uid="uid://b5e632jljonps"
-path="res://.godot/imported/bonk.wav-c04bb1e1f05530d1878e5198b7ee7d75.sample"
+uid="uid://c8bnq30bx7iiq"
+path="res://.godot/imported/paddle.wav-8d03400a1fe1a58cb29b8c8114de879b.sample"
 
 [deps]
 
-source_file="res://audio/bonk.wav"
-dest_files=["res://.godot/imported/bonk.wav-c04bb1e1f05530d1878e5198b7ee7d75.sample"]
+source_file="res://audio/paddle.wav"
+dest_files=["res://.godot/imported/paddle.wav-8d03400a1fe1a58cb29b8c8114de879b.sample"]
 
 [params]
 

@@ -65,18 +65,41 @@ func test_a_harder_impact_is_louder_and_higher() -> void:
 
 
 func test_each_surface_has_its_own_voice() -> void:
-	# One sample, three surfaces. If two voices collapse onto the same
-	# pitch and level, a paddle hit and a floor bounce become the same event
-	# to the ear, which is the thing this exists to avoid.
+	# If two voices collapse onto the same sample, pitch and level, a paddle
+	# hit and a floor bounce become the same event to the ear, which is the
+	# thing this exists to avoid.
 	var voices: Dictionary = ball.VOICES
-	for key in ["paddle", "front_wall", "other"]:
+	for key in ["paddle", "front_wall", "floor", "other"]:
 		assert_true(voices.has(key), "missing a voice for '%s'" % key)
 
 	var seen := []
 	for key in voices:
 		var tone: Dictionary = voices[key]
-		var signature := Vector2(tone["pitch"], tone["db"])
+		assert_true(tone["stream"] is AudioStreamWAV, "'%s' has no sample" % key)
+		var signature := [tone["stream"].resource_path, tone["pitch"], tone["db"]]
 		assert_false(seen.has(signature), "'%s' duplicates another voice" % key)
 		seen.append(signature)
 
+	# The three events the player should tell apart with their eyes shut get
+	# three different samples, not one sample voiced three ways.
+	var paths := {}
+	for key in ["paddle", "front_wall", "floor"]:
+		paths[voices[key]["stream"].resource_path] = key
+	assert_eq(paths.size(), 3, "paddle, front wall and floor should each have their own sample")
+
+	assert_lt(voices["floor"]["db"], voices["paddle"]["db"], "floor bounces should sit back")
 	assert_lt(voices["other"]["db"], voices["paddle"]["db"], "incidental bounces should sit back")
+
+
+func test_jitter_never_outweighs_impact_speed() -> void:
+	# The per-hit spread is there to stop retriggering sounding mechanical.
+	# If it grew past the gap between a soft and a hard hit, speed would stop
+	# being audible, so keep it well inside that gap.
+	var soft: float = ball._impact_pitch(4.0) * (1.0 + ball.PITCH_JITTER)
+	var hard: float = ball._impact_pitch(12.0) * (1.0 - ball.PITCH_JITTER)
+	assert_lt(soft, hard, "pitch jitter should not let a soft hit outrank a hard one")
+
+
+func test_the_floor_is_tagged_for_its_own_voice() -> void:
+	var floor_body := main.get_node("Court/Floor")
+	assert_true(floor_body.is_in_group("floor"), "the floor must be in the 'floor' group")
