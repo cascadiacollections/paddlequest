@@ -57,6 +57,10 @@ paddle:
     blender --background --python tools/make_paddle.py
     @ls -lh assets/paddle.glb
 
+# Regenerate the impact sounds from tools/make_sounds.py (stdlib only).
+sounds:
+    python3 tools/make_sounds.py
+
 # Regression suite (GUT), headless.
 test:
     godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://test -gexit -gprefix=test_
@@ -109,6 +113,7 @@ lint:
     gdlint scripts/ test/
     ruff check tools/
     ruff format --check tools/
+    python3 tools/make_sounds.py --check
 
 # Apply the formatters rather than just checking them.
 format:

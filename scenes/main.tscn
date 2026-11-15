@@ -169,7 +169,7 @@ script = ExtResource("11_jukebox")
 
 [node name="Court" type="Node3D" parent="."]
 
-[node name="Floor" type="StaticBody3D" parent="Court"]
+[node name="Floor" type="StaticBody3D" parent="Court" groups=["floor"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, -1.75)
 
 [node name="Mesh" type="MeshInstance3D" parent="Court/Floor"]

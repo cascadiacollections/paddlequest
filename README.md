@@ -29,6 +29,7 @@ just build       # debug APK -> build/paddleball.apk
 just deploy      # build + adb install
 just log         # adb logcat, filtered
 just build-frame # Steam Frame binary -> build/paddlequest.arm64
+just sounds      # regenerate audio/*.wav from tools/make_sounds.py
 just version     # what version a build would identify as
 ```
 
@@ -406,6 +407,21 @@ and checking its AABB: X +/-0.17, Y +/-0.19, Z -0.014 to 0.209.
 
 Collision stays a plain box. A convex hull of the blade would catch the handle
 and the ball would bounce off the grip.
+
+## Impact sounds
+
+`audio/paddle.wav`, `audio/wall.wav` and `audio/floor.wav` are generated too:
+`just sounds` rebuilds them from `tools/make_sounds.py`, which uses only the
+Python standard library. Each is a few decaying sine partials plus a short
+seeded noise burst, so the output is byte-for-byte reproducible and CI fails
+if the committed files drift from the generator.
+
+`scripts/ball.gd` plays them through one `AudioStreamPolyphonic`, so a fast
+rally layers impacts rather than cutting them off, and picks the sample by
+surface: paddle, front wall, floor, and the wall sample lower and quieter for
+the side walls, ceiling and back wall. Pitch and level ride the impact speed,
+with a little random spread on top so repeated hits at the same speed do not
+sound like one sample being retriggered.
 
 ## CI and containers
 

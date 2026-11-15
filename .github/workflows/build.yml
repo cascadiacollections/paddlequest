@@ -54,6 +54,9 @@ jobs:
           gdlint scripts/ test/ addons/xr_webview/*.gd
           ruff check tools/
           ruff format --check tools/
+          # The impact sounds are generated; a hand-edited or stale wav
+          # would be an opaque binary again.
+          python3 tools/make_sounds.py --check
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
