@@ -63,6 +63,8 @@ func _init() -> void:
 | `use_iframe_embed` | `true` | Serve `home_url` in an iframe on a page of our own rather than navigating to it |
 | `embed_base_url` | — | The origin that page claims. Must be a real `https` URL |
 | `density_dpi` | `320` | Device pixel ratio 2, so a 1280×720 surface is a 640×360 CSS viewport |
+| `show_cursor` | `true` | Draw `point_at()`'s position in the embed document |
+| `cursor_interval_msec` | `33` | Least time between two cursor updates |
 
 Signals: `surface_ready`, `navigation_blocked(url)`.
 
@@ -86,7 +88,11 @@ panel.tap(uv)                               # or send_touch(ACTION_DOWN/MOVE/UP,
 
 A press is a tap while it stays within `touch_slop_px` of where it started, and a drag past that. Without it, hand tremor at 90fps turns every tap into a swipe: a trigger held 111ms drifted ~140px, which Chromium read as a scroll, so controls appeared and nothing was ever clicked.
 
-**There is no cursor, and a 3D one will not work.** A composition layer is composited over the eye buffer, so geometry placed at the ray's hit point is drawn *behind* the panel however close it sits. A cursor has to be drawn inside the page - an absolutely positioned element with `pointer-events: none` over the embed, moved with `evaluateJavascript`. Only on your own document; never inside a cross-origin iframe.
+**The cursor is drawn by the page; a 3D one will not work.** A composition layer is composited over the eye buffer, so geometry placed at the ray's hit point is drawn *behind* the panel however close it sits. So the embed document carries its own cursor - a fixed element with `pointer-events: none` above the iframe, moved through `evaluateJavascript` (the plugin's `evaluate()`). Call `point_at(uv)` every frame the ray is live, on the panel or off it; an off-panel uv hides the cursor. Updates are throttled to `cursor_interval_msec` (33, ~30Hz) and skipped when nothing moved. It exists only on the panel's own document (`use_iframe_embed`, needs the Android plugin): a page loaded directly gets no cursor, and nothing can draw inside a cross-origin iframe. Turn it off with `show_cursor = false`.
+
+```gdscript
+panel.point_at(uv)                          # every frame; off-panel uv hides it
+```
 
 The quad has no collision shape of its own — give it an `Area3D` with a matching `BoxShape3D`, or intersect the ray with the quad's plane yourself.
 

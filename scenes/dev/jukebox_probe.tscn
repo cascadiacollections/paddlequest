@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/dev/jukebox_probe.gd" id="1_probe"]
 [ext_resource type="Script" path="res://scripts/jukebox.gd" id="2_jukebox"]
@@ -17,16 +17,6 @@ size = Vector2(8, 8)
 [sub_resource type="StandardMaterial3D" id="Mat_floor"]
 albedo_color = Color(0.13, 0.14, 0.19, 1)
 roughness = 0.9
-
-[sub_resource type="SphereMesh" id="Mesh_pointer"]
-radius = 0.015
-height = 0.03
-radial_segments = 12
-rings = 6
-
-[sub_resource type="StandardMaterial3D" id="Mat_pointer"]
-shading_mode = 0
-albedo_color = Color(1, 0.85, 0.2, 1)
 
 [sub_resource type="LabelSettings" id="Label_panel"]
 font_size = 96
@@ -50,11 +40,6 @@ far = 60.0
 
 [node name="RightHand" type="XRController3D" parent="XROrigin3D"]
 tracker = &"right_hand"
-
-[node name="Pointer" type="MeshInstance3D" parent="."]
-mesh = SubResource("Mesh_pointer")
-surface_material_override/0 = SubResource("Mat_pointer")
-visible = false
 
 [node name="ControlQuad" type="OpenXRCompositionLayerQuad" parent="XROrigin3D"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.75, 1.5, -1.5)

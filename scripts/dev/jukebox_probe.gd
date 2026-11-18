@@ -40,7 +40,6 @@ const TAP_AFTER := 12.0
 @onready var surface_quad: OpenXRCompositionLayerQuad = $XROrigin3D/SurfaceQuad
 @onready var status: Label3D = $XROrigin3D/Status
 @onready var right_hand: XRController3D = $XROrigin3D/RightHand
-@onready var pointer: MeshInstance3D = $Pointer
 
 var _elapsed := 0.0
 var _viewport_was_null := false
@@ -111,10 +110,13 @@ func _aim() -> void:
 		if distance > 0.0:
 			var hit := origin + direction * distance
 			uv = surface_quad.local_to_uv(surface_quad.to_local(hit))
-			pointer.global_position = hit
 
+	# The cursor is drawn by the page, not here. A bead at the hit point is
+	# what this used to do, and it was never visible: the composition layer is
+	# composited over the eye buffer, so it covered the bead however close to
+	# the panel it sat.
+	surface_quad.point_at(uv)
 	_on_panel = XRWebPanel.uv_is_on_panel(uv)
-	pointer.visible = _on_panel
 	if _on_panel:
 		_last_uv = uv
 
