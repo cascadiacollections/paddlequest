@@ -61,3 +61,103 @@ func test_a_touch_goes_nowhere_without_a_web_view() -> void:
 	assert_false(panel.is_live(), "no web view off-device")
 	assert_false(panel.send_touch(XRWebPanel.ACTION_DOWN, Vector2(0.5, 0.5)), "so no touch")
 	assert_false(panel.tap(Vector2(0.5, 0.5)), "and no tap")
+
+
+func test_a_hit_maps_to_the_surface_pixel_the_touch_lands_on() -> void:
+	# The corners are the first and last pixel edges, not one past them.
+	var size := Vector2i(1280, 720)
+	assert_eq(XRWebPanel.uv_to_surface_px(Vector2(0.0, 0.0), size), Vector2(0, 0), "top left")
+	assert_eq(XRWebPanel.uv_to_surface_px(Vector2(1.0, 1.0), size), Vector2(1280, 720), "far edge")
+	assert_eq(XRWebPanel.uv_to_surface_px(Vector2(0.5, 0.5), size), Vector2(640, 360), "centre")
+
+
+func test_the_mapping_follows_the_panel_aspect_not_a_square() -> void:
+	# A wide, short quad on a surface of the same aspect. A mapping that
+	# divided both axes by one extent would put this hit at the wrong height.
+	panel.quad_size = Vector2(2.0, 0.5)
+	var hit := Vector3(0.5, 0.125, 0.0)  # right of centre by a quarter, up by a quarter
+	var uv := panel.local_to_uv(hit)
+	assert_eq(uv, Vector2(0.75, 0.25), "uv in each axis's own extent")
+	assert_eq(XRWebPanel.uv_to_surface_px(uv, Vector2i(1920, 480)), Vector2(1440, 120), "pixel")
+
+
+func test_a_scaled_panel_still_maps_its_own_corners() -> void:
+	# The probe goes global hit -> to_local() -> local_to_uv(). If the node is
+	# scaled, to_local() is what undoes it, so a corner of the scaled quad must
+	# still be a corner of the page. Done with the node's own transform rather
+	# than in the tree: a composition layer entering the tree headless reaches
+	# for an XR global transform that is not there. For a node with no parent,
+	# its transform is its global transform, so this is what to_local() does.
+	panel.transform = Transform3D(Basis.from_scale(Vector3(2.0, 3.0, 1.0)), Vector3(1, 1.5, -2))
+	var world := panel.transform
+	var top_left := world * Vector3(-QUAD.x / 2.0, QUAD.y / 2.0, 0.0)
+	assert_almost_eq(top_left.x, 1.0 - QUAD.x, 0.0001, "twice as wide in the world")
+	assert_almost_eq(top_left.y, 1.5 + QUAD.y * 1.5, 0.0001, "three times as tall")
+	var uv := panel.local_to_uv(world.affine_inverse() * top_left)
+	assert_almost_eq(uv, Vector2(0.0, 0.0), Vector2(0.0001, 0.0001), "still the page's corner")
+
+	var off_right := world * Vector3(QUAD.x / 2.0 + 0.01, 0.0, 0.0)
+	var off_uv := panel.local_to_uv(world.affine_inverse() * off_right)
+	assert_false(XRWebPanel.uv_is_on_panel(off_uv), "just past the scaled edge is off")
+
+
+func test_the_cursor_script_carries_the_uv_and_hides_off_the_panel() -> void:
+	assert_eq(
+		XRWebPanel.cursor_script(Vector2(0.25, 0.75)),
+		"window.xrCursor&&xrCursor(0.2500,0.7500)",
+		"page fractions, fixed point"
+	)
+	assert_eq(
+		XRWebPanel.cursor_script(Vector2(1.0, 0.0)),
+		"window.xrCursor&&xrCursor(1.0000,0.0000)",
+		"the edge is still on the panel"
+	)
+	var hidden := "window.xrCursor&&xrCursor(-1,-1)"
+	assert_eq(XRWebPanel.cursor_script(Vector2(1.01, 0.5)), hidden, "past the right edge")
+	assert_eq(XRWebPanel.cursor_script(Vector2(0.5, -0.01)), hidden, "above the top")
+	assert_eq(XRWebPanel.cursor_script(XRWebPanel.CURSOR_HIDDEN), hidden, "the hidden marker")
+
+
+func test_the_cursor_script_never_uses_exponent_notation() -> void:
+	# str() of a tiny float is "1e-05", which is valid JavaScript but not what
+	# a reader expects; more to the point, a format that ever emitted "nan" or
+	# "inf" would throw in the page instead of moving the dot.
+	assert_eq(
+		XRWebPanel.cursor_script(Vector2(0.00001, 0.99999)),
+		"window.xrCursor&&xrCursor(0.0000,1.0000)",
+		"rounded, not 1e-05"
+	)
+
+
+func test_the_embed_page_has_a_cursor_that_cannot_take_input() -> void:
+	var html := XRWebPanel.EMBED_TEMPLATE % "https://www.youtube.com/embed/x"
+	assert_string_contains(html, 'id="xr-cursor"')
+	assert_string_contains(html, "pointer-events:none")
+	assert_string_contains(html, "function xrCursor(u, v)")
+	# loadDataWithBaseURL is safe from URL decoding, but loadData() is not,
+	# and the template must survive either: no fragment, no stray escape.
+	var body := XRWebPanel.EMBED_TEMPLATE.replace("%s", "")
+	assert_false(body.contains("%"), "no percent sign outside the format specifier")
+	assert_eq(body.count("#"), 0, "no hash")
+
+
+func test_cursor_updates_are_throttled_and_deduplicated() -> void:
+	panel.cursor_interval_msec = 33
+	panel._cursor_wanted = Vector2(0.5, 0.5)
+	assert_true(panel.cursor_update_due(1000), "first move goes out")
+	panel._cursor_sent = panel._cursor_wanted
+
+	panel._cursor_wanted = Vector2(0.6, 0.5)
+	assert_false(panel.cursor_update_due(1010), "10ms later is too soon")
+	assert_true(panel.cursor_update_due(1033), "a whole interval later it goes")
+	panel._cursor_sent = panel._cursor_wanted
+
+	assert_false(panel.cursor_update_due(2000), "nothing to send when it has not moved")
+
+
+func test_pointing_off_device_sends_nothing_and_does_not_throw() -> void:
+	# No WebView, so point_at() must stop before reaching for the bridge.
+	assert_false(panel.point_at(Vector2(0.5, 0.5)), "nothing to move")
+	assert_eq(panel._cursor_wanted, Vector2(0.5, 0.5), "but the wish is kept")
+	assert_false(panel.point_at(Vector2(2.0, 0.5)), "off the panel")
+	assert_eq(panel._cursor_wanted, XRWebPanel.CURSOR_HIDDEN, "is a request to hide")

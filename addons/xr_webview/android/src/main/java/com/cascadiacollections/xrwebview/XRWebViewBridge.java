@@ -95,6 +95,18 @@ public final class XRWebViewBridge {
 		Log.i(TAG, "loaded embed document with base " + baseUrl);
 	}
 
+	/**
+	 * Runs {@code script} in the page, discarding its result.
+	 *
+	 * <p>Here because {@link WebView#evaluateJavascript} takes a ValueCallback, and the
+	 * callers want null for it - which, like loadDataWithBaseURL()'s historyUrl, is not worth
+	 * passing through JavaClassWrapper. It is what moves the panel's cursor, at ~30Hz, so it
+	 * logs nothing. Call on the UI thread.
+	 */
+	public static void evaluate(WebView view, String script) {
+		view.evaluateJavascript(script, null);
+	}
+
 	static String[] splitHosts(String csv) {
 		if (csv == null || csv.trim().isEmpty()) {
 			return new String[0];

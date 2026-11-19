@@ -115,6 +115,19 @@ const ACTION_CANCEL := 3
 ## into drags. Raised accordingly; lower it for a panel within reach.
 @export var touch_slop_px := 24.0
 
+## Draw a pointer inside the page where point_at() says the ray is.
+##
+## Only on the document this panel serves itself (use_iframe_embed), since
+## that is the only page with a cursor in it. A page loaded directly gets none.
+@export var show_cursor := true
+
+## The least time between two cursor updates sent to the page, in milliseconds.
+##
+## Every update is a trip to the UI thread and a JavaScript evaluation. At the
+## headset's 72-120Hz that is work for nothing: a dot moved at ~30Hz looks the
+## same, so the default is 33.
+@export var cursor_interval_msec := 33
+
 ## The Java shim that reaches what GDScript cannot. See tools/jukebox-shim.
 ##
 ## WebSettings, WebViewClient and WebChromeClient are all unreachable from here
@@ -156,13 +169,41 @@ const BRIDGE_CLASS := "com.cascadiacollections.xrwebview.XRWebViewBridge"
 ## No "#" or "%" outside the format specifier, for the reason PROBE_HTML
 ## carries at length - which is also why the sizes are vw/vh rather than the
 ## percentages this would otherwise be written with.
+##
+## The second element is the pointer. A composition layer is composited over
+## the eye buffer, so anything the game draws at the ray's hit point lands
+## behind the panel however close to it it sits; the only place a cursor can
+## be seen is inside the page. pointer-events:none so it never takes the touch
+## it is there to aim, and it sits in our document, above the iframe, because
+## nothing can draw inside a cross-origin frame. xrCursor() takes the same 0..1
+## page fractions send_touch() does and scales them by the CSS viewport, so the
+## cursor and the touch share one mapping whatever devicePixelRatio turns out
+## to be. Centred with a negative margin rather than translate(-50%,-50%),
+## again for the "%". A negative u hides it.
 const EMBED_TEMPLATE := """
 <html><head><meta name="viewport" content="width=device-width,initial-scale=1">
 </head><body style="margin:0;background:rgb(0,0,0);overflow:hidden">
 <iframe style="border:0;position:absolute;top:0;left:0;width:100vw;height:100vh"
 allow="autoplay; encrypted-media" allowfullscreen src="%s"></iframe>
+<div id="xr-cursor" style="position:fixed;left:0;top:0;width:14px;height:14px;
+margin:-7px 0 0 -7px;border-radius:7px;background:rgba(255,255,255,0.9);
+box-shadow:0 0 0 2px rgba(0,0,0,0.6);pointer-events:none;display:none;
+z-index:2147483647"></div>
+<script>
+function xrCursor(u, v) {
+  var c = document.getElementById('xr-cursor');
+  if (!c) return;
+  if (u < 0) { c.style.display = 'none'; return; }
+  c.style.transform = 'translate(' + (u * innerWidth) + 'px,' + (v * innerHeight) + 'px)';
+  c.style.display = 'block';
+}
+</script>
 </body></html>
 """
+
+## Where the cursor is when it is not on the panel. Anything off the panel
+## would do; one value keeps "hidden" comparable to the last thing sent.
+const CURSOR_HIDDEN := Vector2(-1.0, -1.0)
 
 const DESKTOP_USER_AGENT := (
 	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -253,6 +294,11 @@ var _pending_url := ""
 var _touch_down_msec := 0
 var _touch_origin_px := Vector2.ZERO
 var _past_slop := false
+## Whether the WebView is showing EMBED_TEMPLATE, i.e. whether xrCursor exists.
+var _serving_embed := false
+var _cursor_wanted := CURSOR_HIDDEN
+var _cursor_sent := CURSOR_HIDDEN
+var _cursor_sent_msec := -1_000_000
 
 
 func _ready() -> void:
@@ -379,6 +425,76 @@ static func uv_is_on_panel(uv: Vector2) -> bool:
 	return uv.x >= 0.0 and uv.x <= 1.0 and uv.y >= 0.0 and uv.y <= 1.0
 
 
+## The surface pixel a uv lands on - where send_touch() puts the press.
+##
+## Surface pixels, not CSS pixels: MotionEvent coordinates are in the view's
+## own pixels, and the page's CSS viewport is these divided by the display's
+## density. The cursor never needs this conversion, because xrCursor() works
+## in the same 0..1 fractions and lets the page do the scaling.
+static func uv_to_surface_px(uv: Vector2, surface_size: Vector2i) -> Vector2:
+	return Vector2(uv.x * surface_size.x, uv.y * surface_size.y)
+
+
+## The JavaScript that puts the page's cursor at uv, or hides it if uv is off
+## the panel.
+##
+## Guarded on xrCursor existing: if the page has navigated away from our
+## document, a ReferenceError in its console every 33ms is noise nobody needs.
+## Fixed-point rather than %s, so a float never comes out in exponent form.
+static func cursor_script(uv: Vector2) -> String:
+	if not uv_is_on_panel(uv):
+		return "window.xrCursor&&xrCursor(-1,-1)"
+	return "window.xrCursor&&xrCursor(%.4f,%.4f)" % [uv.x, uv.y]
+
+
+## Tell the panel where the ray is, in the uv local_to_uv() gives. Call every
+## frame the ray is live, on or off the panel; an off-panel uv hides the
+## cursor. Returns whether an update was sent to the page this call.
+##
+## Throttled to cursor_interval_msec, and nothing is sent while the cursor is
+## already where it is wanted. A position held back by the throttle is sent by
+## a later call, which is why this wants calling every frame rather than only
+## when the ray moves.
+func point_at(uv: Vector2) -> bool:
+	_cursor_wanted = uv if uv_is_on_panel(uv) else CURSOR_HIDDEN
+	if not cursor_update_due(Time.get_ticks_msec()):
+		return false
+	if not show_cursor or not _serving_embed or _web_view == null:
+		return false
+
+	_cursor_sent = _cursor_wanted
+	var bridge = JavaClassWrapper.wrap(BRIDGE_CLASS)
+	if bridge == null:
+		return false
+	_run_on_ui_thread(_evaluate.bind(bridge, XRWebPanel.cursor_script(_cursor_sent)))
+	return true
+
+
+## Hide the cursor, e.g. when the hand holding the ray goes away.
+func hide_cursor() -> void:
+	point_at(CURSOR_HIDDEN)
+
+
+## Whether a cursor update would go out at now_msec, and if so, start the next
+## interval. Separate from point_at() so the throttle can be tested without a
+## WebView.
+func cursor_update_due(now_msec: int) -> bool:
+	if _cursor_wanted == _cursor_sent:
+		return false
+	if now_msec - _cursor_sent_msec < cursor_interval_msec:
+		return false
+	_cursor_sent_msec = now_msec
+	return true
+
+
+## Runs on the Android UI thread, like every other WebView call.
+func _evaluate(bridge, script: String) -> void:
+	if _web_view == null:
+		return
+	bridge.evaluate(_web_view, script)
+	_report_java_exception("moving the cursor")
+
+
 ## Deliver a touch to the page. Returns false if it went nowhere.
 ##
 ## The panel lives on a VirtualDisplay no finger will ever touch, so every
@@ -400,7 +516,7 @@ func send_touch(action: int, uv: Vector2) -> bool:
 	if _web_view == null:
 		return false
 
-	var point := Vector2(uv.x * android_surface_size.x, uv.y * android_surface_size.y)
+	var point := XRWebPanel.uv_to_surface_px(uv, android_surface_size)
 	var now := _uptime_msec()
 
 	match action:
@@ -609,8 +725,13 @@ func _load_pending() -> void:
 			var html := EMBED_TEMPLATE % _pending_url
 			bridge.loadEmbed(_web_view, embed_base_url, html)
 			_report_java_exception("loading the embed document")
+			_serving_embed = true
+			# A fresh document starts with the cursor hidden; make the next
+			# point_at() send its position rather than assume it is there.
+			_cursor_sent = CURSOR_HIDDEN
 			return
 
+	_serving_embed = false
 	_web_view.loadUrl(_pending_url)
 
 
