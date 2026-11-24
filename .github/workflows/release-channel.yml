@@ -1,0 +1,70 @@
+name: Release channel
+
+# Plans what a release would publish. The successful path is a dry-run with
+# or without secrets: it writes build/release-channel-plan.json and stops.
+# It does not create a GitHub Release, push a tag, or upload to a store.
+# workflow_dispatch with dry_run left on (the default) is that same plan.
+# Turning dry_run off fails the job. The commands and the secrets they need
+# are in docs/release-channel.md.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Plan only. Publishing is refused.
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-channel-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Refuse a real publish
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == false
+        run: |
+          echo "::error::This workflow does not create releases, tags, or store uploads. Leave dry_run enabled. See docs/release-channel.md."
+          exit 1
+
+      - name: Plan the release channel
+        env:
+          # Missing secrets expand to empty strings. The planner treats that
+          # as unsigned / not ready and still exits 0. It never prints the values.
+          RELEASE_CHANNEL_PUBLISH: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == false }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_USER: ${{ secrets.ANDROID_KEYSTORE_USER }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          HORIZON_APP_ID: ${{ secrets.HORIZON_APP_ID }}
+          HORIZON_APP_SECRET: ${{ secrets.HORIZON_APP_SECRET }}
+          HORIZON_AGE_GROUP: ${{ vars.HORIZON_AGE_GROUP }}
+          STEAM_USERNAME: ${{ secrets.STEAM_USERNAME }}
+          STEAM_CONFIG_VDF_BASE64: ${{ secrets.STEAM_CONFIG_VDF_BASE64 }}
+          STEAM_SSFN_FILENAME: ${{ secrets.STEAM_SSFN_FILENAME }}
+          STEAM_SSFN_BASE64: ${{ secrets.STEAM_SSFN_BASE64 }}
+          STEAM_APP_ID: ${{ secrets.STEAM_APP_ID }}
+          STEAM_DEPOT_FRAME_ID: ${{ secrets.STEAM_DEPOT_FRAME_ID }}
+        run: |
+          set -euo pipefail
+          python3 tools/release_channel.py --plan build/release-channel-plan.json
+          python3 tools/test_release_channel.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-channel-plan
+          path: build/release-channel-plan.json
+          retention-days: 14

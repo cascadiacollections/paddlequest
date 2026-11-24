@@ -447,10 +447,17 @@ Results and the device checklist are in `docs/godot-4.8-beta2-trial.md`.
 Pushing a tag matching `v*` drafts a GitHub Release with both builds
 attached, using the `gh` CLI the runner already ships. It is a draft, so a
 human decides when it goes out. A tagged build **fails** rather than warns
-if `ANDROID_KEYSTORE_BASE64` is not configured: a throwaway-signed APK
-cannot update any install but its own, which is fine for a branch build
-nobody installs and not fine for something published under a version number.
-Store uploads (Horizon, Steam depot) are still open - see issue #13.
+if `ANDROID_KEYSTORE_BASE64` (and the user and password secrets beside it)
+is not configured: a throwaway-signed APK cannot update any install but its
+own, which is fine for a branch build nobody installs and not fine for
+something published under a version number.
+
+`.github/workflows/release-channel.yml` plans that Release, a Horizon ALPHA
+upload, and a Steam Frame depot upload. The plan runs with no secrets: it
+writes a `release-channel-plan` artifact and does not create a release, push
+a tag, or upload to a store. The secret names, the keystore command, and the
+store commands are in `docs/release-channel.md`. Issue #13 stays open until
+those secrets exist and the uploads are actually run.
 
 Every build is stamped with a version derived from the run number and
 `git describe` (`tools/stamp_version.py`); before that, every build this
