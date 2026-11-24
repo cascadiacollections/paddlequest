@@ -114,6 +114,7 @@ lint:
     ruff check tools/
     ruff format --check tools/
     python3 tools/make_sounds.py --check
+    python3 tools/check_cursor_page.py
 
 # Apply the formatters rather than just checking them.
 format:
@@ -199,6 +200,12 @@ wifi-connect ip:
 wifi-off:
     adb disconnect
     adb usb
+
+# Desktop stand-in for the in-page cursor. No headset and no composition
+# layer: a Control the size of the embed's CSS viewport, with the same dot.
+# Press C to toggle it. `-- --uv=0.25,0.5` pins the dot for a screenshot.
+cursor-preview:
+    godot res://scenes/dev/cursor_preview.tscn
 
 # --- Jukebox probe ----------------------------------------------------
 # Deploys scenes/dev/jukebox_probe.tscn in place of the game: two composition

@@ -205,6 +205,11 @@ function xrCursor(u, v) {
 ## would do; one value keeps "hidden" comparable to the last thing sent.
 const CURSOR_HIDDEN := Vector2(-1.0, -1.0)
 
+## Diameter of the in-page dot, in CSS pixels. The embed template's width,
+## height and centring margin are this and half of it. tools/check_cursor_page.py
+## fails if that template drifts from this constant.
+const CURSOR_DIAMETER_PX := 14.0
+
 const DESKTOP_USER_AGENT := (
 	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
 	+ "Chrome/125.0.0.0 Safari/537.36"
@@ -435,6 +440,18 @@ static func uv_to_surface_px(uv: Vector2, surface_size: Vector2i) -> Vector2:
 	return Vector2(uv.x * surface_size.x, uv.y * surface_size.y)
 
 
+## CSS pixel of the cursor's centre for a viewport of css_size.
+##
+## xrCursor() translates a CURSOR_DIAMETER_PX box by (u * innerWidth,
+## v * innerHeight) and a negative margin of half that diameter pulls the box
+## back, so the centre sits on the uv. send_touch() hits that same uv in
+## surface pixels. Off the panel, returns CURSOR_HIDDEN.
+static func cursor_css_center(uv: Vector2, css_size: Vector2) -> Vector2:
+	if not uv_is_on_panel(uv):
+		return CURSOR_HIDDEN
+	return Vector2(uv.x * css_size.x, uv.y * css_size.y)
+
+
 ## The JavaScript that puts the page's cursor at uv, or hides it if uv is off
 ## the panel.
 ##
@@ -455,17 +472,23 @@ static func cursor_script(uv: Vector2) -> String:
 ## already where it is wanted. A position held back by the throttle is sent by
 ## a later call, which is why this wants calling every frame rather than only
 ## when the ray moves.
+##
+## show_cursor off is a hide, not a skipped call: leaving the last dot on the
+## page would make the toggle look broken. The interval is stamped only once
+## the script is queued, so a frame with no WebView does not use up a slot.
 func point_at(uv: Vector2) -> bool:
-	_cursor_wanted = uv if uv_is_on_panel(uv) else CURSOR_HIDDEN
-	if not cursor_update_due(Time.get_ticks_msec()):
+	_cursor_wanted = uv if show_cursor and uv_is_on_panel(uv) else CURSOR_HIDDEN
+	var now := Time.get_ticks_msec()
+	if not cursor_update_due(now):
 		return false
-	if not show_cursor or not _serving_embed or _web_view == null:
+	if not _serving_embed or _web_view == null:
 		return false
 
-	_cursor_sent = _cursor_wanted
 	var bridge = JavaClassWrapper.wrap(BRIDGE_CLASS)
 	if bridge == null:
 		return false
+	_cursor_sent = _cursor_wanted
+	_cursor_sent_msec = now
 	_run_on_ui_thread(_evaluate.bind(bridge, XRWebPanel.cursor_script(_cursor_sent)))
 	return true
 
@@ -475,16 +498,22 @@ func hide_cursor() -> void:
 	point_at(CURSOR_HIDDEN)
 
 
-## Whether a cursor update would go out at now_msec, and if so, start the next
-## interval. Separate from point_at() so the throttle can be tested without a
-## WebView.
+## One line for the probe's status label: the wish, not proof the page moved.
+func cursor_status() -> String:
+	var at := "hidden"
+	if uv_is_on_panel(_cursor_wanted):
+		at = "%.2f,%.2f" % [_cursor_wanted.x, _cursor_wanted.y]
+	return "show=%s embed=%s at=%s" % [show_cursor, _serving_embed, at]
+
+
+## Whether a cursor update should go out at now_msec.
+##
+## Does not record the send. point_at() stamps the interval only after the
+## script is queued, so this can be called from a test with no WebView.
 func cursor_update_due(now_msec: int) -> bool:
 	if _cursor_wanted == _cursor_sent:
 		return false
-	if now_msec - _cursor_sent_msec < cursor_interval_msec:
-		return false
-	_cursor_sent_msec = now_msec
-	return true
+	return now_msec - _cursor_sent_msec >= cursor_interval_msec
 
 
 ## Runs on the Android UI thread, like every other WebView call.

@@ -188,6 +188,9 @@ func _lines() -> PackedStringArray:
 	lines.append("")
 	lines.append("AIM      on_panel=%s uv=%.2f,%.2f" % [_on_panel, _last_uv.x, _last_uv.y])
 	lines.append("         last=%s" % _last_action)
+	# The dot itself is in the page. This is the wish point_at() is holding,
+	# which is readable in the headset when the dot is the thing under test.
+	lines.append("         cursor=%s" % surface_quad.cursor_status())
 	if not _blocked_url.is_empty():
 		lines.append("         BLOCKED %s" % _blocked_url)
 
