@@ -146,18 +146,55 @@ func test_cursor_updates_are_throttled_and_deduplicated() -> void:
 	panel._cursor_wanted = Vector2(0.5, 0.5)
 	assert_true(panel.cursor_update_due(1000), "first move goes out")
 	panel._cursor_sent = panel._cursor_wanted
+	panel._cursor_sent_msec = 1000
 
 	panel._cursor_wanted = Vector2(0.6, 0.5)
 	assert_false(panel.cursor_update_due(1010), "10ms later is too soon")
 	assert_true(panel.cursor_update_due(1033), "a whole interval later it goes")
 	panel._cursor_sent = panel._cursor_wanted
+	panel._cursor_sent_msec = 1033
 
 	assert_false(panel.cursor_update_due(2000), "nothing to send when it has not moved")
 
 
 func test_pointing_off_device_sends_nothing_and_does_not_throw() -> void:
 	# No WebView, so point_at() must stop before reaching for the bridge.
+	var stamp := panel._cursor_sent_msec
 	assert_false(panel.point_at(Vector2(0.5, 0.5)), "nothing to move")
 	assert_eq(panel._cursor_wanted, Vector2(0.5, 0.5), "but the wish is kept")
+	assert_eq(panel._cursor_sent_msec, stamp, "a missed send does not spend the interval")
 	assert_false(panel.point_at(Vector2(2.0, 0.5)), "off the panel")
 	assert_eq(panel._cursor_wanted, XRWebPanel.CURSOR_HIDDEN, "is a request to hide")
+
+
+func test_turning_the_cursor_off_is_a_request_to_hide_it() -> void:
+	# A toggle that only stopped sending would leave the last dot on the page.
+	panel.show_cursor = false
+	assert_false(panel.point_at(Vector2(0.5, 0.5)), "nothing to move off-device")
+	assert_eq(panel._cursor_wanted, XRWebPanel.CURSOR_HIDDEN, "the page is asked to hide")
+	assert_string_contains(panel.cursor_status(), "show=false")
+	assert_string_contains(panel.cursor_status(), "at=hidden")
+
+
+func test_the_cursor_centre_is_the_point_the_touch_hits() -> void:
+	# density_dpi 320 is a device pixel ratio of 2: a 1280x720 surface is a
+	# 640x360 CSS viewport. The dot's centre and the touch are the same uv.
+	var surface := Vector2i(1280, 720)
+	var css := Vector2(surface) / 2.0
+	var uv := Vector2(0.25, 0.75)
+	var centre := XRWebPanel.cursor_css_center(uv, css)
+	assert_eq(centre, Vector2(160, 270), "CSS pixel of the centre")
+	assert_almost_eq(
+		centre * 2.0, XRWebPanel.uv_to_surface_px(uv, surface), Vector2(0.001, 0.001), "same point"
+	)
+	assert_eq(XRWebPanel.CURSOR_DIAMETER_PX, 14.0, "the template's box")
+	assert_eq(
+		XRWebPanel.cursor_css_center(Vector2(1.01, 0.5), css),
+		XRWebPanel.CURSOR_HIDDEN,
+		"off the panel has no centre"
+	)
+
+
+func test_cursor_status_reports_the_wish() -> void:
+	panel.point_at(Vector2(0.25, 0.5))
+	assert_eq(panel.cursor_status(), "show=true embed=false at=0.25,0.50")

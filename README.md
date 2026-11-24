@@ -173,9 +173,12 @@ Movement under `touch_slop_px` is swallowed so a press stays a tap. Without
 that, hand tremor at 90fps drifted a held press ~140px, which Chromium read as
 a scroll: the player showed its controls and nothing was ever clicked.
 
-There is no cursor, and a 3D one cannot work — a composition layer composites
-over the eye buffer, so a marker at the ray's hit point draws behind the panel
-however close it sits. It has to be drawn inside the page; see issue #19.
+The cursor is drawn inside the page. A composition layer composites over the
+eye buffer, so a marker at the ray's hit point draws behind the panel however
+close it sits. The embed document carries a `pointer-events: none` dot, moved
+by `point_at()`. `scenes/dev/cursor_preview.tscn` (`just cursor-preview`) draws
+that same dot on the desktop, and the regression suite checks the mapping.
+Whether it sits on the touch in a headset is still open — see issue #19.
 
 `home_url` defaults to a video: Blender's Big Buck Bunny at 4K60 (CC-BY), no
 account needed, served through the embed player. Point it anywhere inside
@@ -290,8 +293,10 @@ top of this section.
 **Still unproven.** Hole punch — the working configuration is `sort_order`
 overlay without it, so the caveat further up is neither confirmed nor refuted.
 The foveation interaction. Keyboard input, which rules out search, and search
-is most of what a jukebox is. And `xr-webview-addon.zip`, which is only built
-on a `v*` tag and has never been produced. Tracked in issue #19.
+is most of what a jukebox is. The in-page cursor is implemented and covered
+off-device (`scenes/dev/cursor_preview.tscn`); a headset still has to confirm
+that the dot lands on the touch. And `xr-webview-addon.zip`, which is only
+built on a `v*` tag and has never been produced. Tracked in issue #19.
 
 To pick this up: `just probe` puts the two quads and the state readout in
 front of you, and clearing `probe_only` in the inspector switches the
