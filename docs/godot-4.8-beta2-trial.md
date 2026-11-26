@@ -35,7 +35,7 @@ the Dockerfile pin disagrees. It does not put a `godot` binary on `PATH`, and
 it checks at the end that `project.godot`, `export_presets.cfg`, the workflow
 and the devcontainer are unmodified.
 
-CI: **Godot 4.8 beta 2 trial**, `workflow_dispatch` only. It is not part of
+CI: **Godot 4.8 trial** (`godot-4.8-trial.yml`, version input), `workflow_dispatch` only. It is not part of
 `build.yml` and does not gate pull requests.
 
 This trial uses the official binaries. It does not compile Godot, so it does

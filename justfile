@@ -65,7 +65,8 @@ sounds:
 test:
     godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://test -gexit -gprefix=test_
 
-# Opt-in Godot 4.8-beta2 trial. Downloads that editor and its matching
+# Opt-in Godot 4.8 pre-release trial (4.8-beta5 unless GODOT_TRIAL_TAG names
+# another godot-builds tag). Downloads that editor and its matching
 # templates into a cache, and does not install them over `godot` on PATH.
 # Editor, CI and exports stay on the pin in build.yml and the devcontainer.
 trial-48:
