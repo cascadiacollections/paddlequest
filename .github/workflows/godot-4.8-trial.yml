@@ -1,13 +1,22 @@
-name: Godot 4.8 beta 2 trial
+name: Godot 4.8 trial
 
 # Opt-in. workflow_dispatch only, so it is not part of the pull-request or
 # push build and cannot fail the stable gate. The stable editor, templates
 # and exports stay on GODOT_VERSION in build.yml.
 on:
   workflow_dispatch:
+    inputs:
+      godot_version:
+        description: godot-builds release tag to try (e.g. 4.8-beta5, 4.8-rc1)
+        required: true
+        default: 4.8-beta5
 
 permissions:
   contents: read
+
+env:
+  # Through env, not interpolated into the script, so the input is data.
+  GODOT_TRIAL_TAG: ${{ inputs.godot_version }}
 
 jobs:
   trial:
@@ -30,7 +39,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/paddlequest/godot-trial/downloads
-          key: godot-trial-4.8-beta2-${{ hashFiles('tools/godot_48_trial.sh', '.github/workflows/build.yml', '.devcontainer/Dockerfile') }}
+          key: godot-trial-${{ inputs.godot_version }}-${{ hashFiles('tools/godot_48_trial.sh', '.github/workflows/build.yml', '.devcontainer/Dockerfile') }}
 
-      - name: Run the 4.8-beta2 trial
+      - name: Run the ${{ inputs.godot_version }} trial
         run: bash tools/godot_48_trial.sh

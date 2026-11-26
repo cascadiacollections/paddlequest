@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Opt-in Godot 4.8-beta2 compatibility trial.
+# Opt-in Godot 4.8 pre-release compatibility trial (4.8-beta5 by default).
 #
 # The editor, CI, devcontainer and exports stay on the stable pin (GODOT_VERSION
 # in .github/workflows/build.yml, which must match .devcontainer/Dockerfile).
@@ -14,6 +14,7 @@
 #
 # Usage:
 #   bash tools/godot_48_trial.sh
+#   GODOT_TRIAL_TAG=4.8-rc1 bash tools/godot_48_trial.sh      # another tag
 #   GODOT_TRIAL_SKIP_ANDROID=1 bash tools/godot_48_trial.sh   # no APK
 #   GODOT_TRIAL_SKIP_STABLE=1 bash tools/godot_48_trial.sh    # beta only
 #
@@ -24,7 +25,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-TRIAL_TAG="4.8-beta2"
+# A godotengine/godot-builds release tag. It becomes part of download URLs and
+# cache paths, so only the pre-release tag shape is accepted.
+TRIAL_TAG="${GODOT_TRIAL_TAG:-4.8-beta5}"
+if [[ ! "$TRIAL_TAG" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?-(dev|beta|rc)[0-9]+$ ]]; then
+  echo "GODOT_TRIAL_TAG must look like 4.8-beta5 or 4.8-rc1, got: $TRIAL_TAG" >&2
+  exit 1
+fi
 TRIAL_REPO="godotengine/godot-builds"
 CACHE="${GODOT_TRIAL_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/paddlequest/godot-trial}"
 DOWNLOADS="$CACHE/downloads"
